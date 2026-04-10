@@ -1,0 +1,56 @@
+﻿services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: novadepot-backend
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: novadepot
+      DB_USERNAME: root
+      DB_PASSWORD: root
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: change_me_in_prod_please
+      APP_TENANT_MODE: single
+      APP_BILLING_ENABLED: "false"
+      APP_PLAN_ENFORCE_ENABLED: "false"
+      AI_PROVIDER: rule
+      AI_PAID_ENABLED: "false"
+      AI_RULE_LOW_STOCK_THRESHOLD: 10
+      AI_RULE_ABNORMAL_CHANGE_THRESHOLD: 100
+    depends_on:
+      - mysql
+      - redis
+    networks:
+      - novadepot-net
+
+  mysql:
+    image: mysql:8.0
+    container_name: novadepot-mysql
+    command: --default-authentication-plugin=mysql_native_password
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: novadepot
+    volumes:
+      - ./deploy/mysql/init:/docker-entrypoint-initdb.d
+    networks:
+      - novadepot-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: novadepot-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - novadepot-net
+
+networks:
+  novadepot-net:
+    driver: bridge

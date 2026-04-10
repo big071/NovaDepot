@@ -1,0 +1,85 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: novadepot-mysql
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: novadepot
+    ports:
+      - "13306:3306"
+    volumes:
+      - ./backend/deploy/mysql/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    networks:
+      - novadepot-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: novadepot-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    networks:
+      - novadepot-net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: novadepot-backend
+    ports:
+      - "18080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: novadepot
+      DB_USERNAME: root
+      DB_PASSWORD: root
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      JWT_SECRET: change_me_in_prod_please
+      APP_TENANT_MODE: single
+      APP_BILLING_ENABLED: "false"
+      APP_PLAN_ENFORCE_ENABLED: "false"
+      AI_PROVIDER: rule
+      AI_PAID_ENABLED: "false"
+      AI_RULE_LOW_STOCK_THRESHOLD: 10
+      AI_RULE_ABNORMAL_CHANGE_THRESHOLD: 100
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - novadepot-net
+
+  frontend-vue:
+    build:
+      context: ./frontend-vue
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: http://localhost:18080/api/v1
+        VITE_APP_NAME: NovaDepot Vue
+        VITE_ENABLE_MOCK: "false"
+    container_name: novadepot-frontend-vue
+    ports:
+      - "3100:80"
+    depends_on:
+      - backend
+    networks:
+      - novadepot-net
+
+networks:
+  novadepot-net:
+    driver: bridge

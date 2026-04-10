@@ -1,0 +1,46 @@
+﻿spring:
+  application:
+    name: novadepot-backend
+  profiles:
+    active: dev
+  jackson:
+    time-zone: Asia/Shanghai
+    date-format: yyyy-MM-dd HH:mm:ss
+
+server:
+  port: 8080
+
+mybatis-plus:
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+  configuration:
+    map-underscore-to-camel-case: true
+
+app:
+  tenant:
+    mode: ${APP_TENANT_MODE:single}
+  billing:
+    enabled: ${APP_BILLING_ENABLED:false}
+  plan-enforce-enabled: ${APP_PLAN_ENFORCE_ENABLED:false}
+  jwt:
+    secret: ${JWT_SECRET:change_me_in_dev_please_change}
+    expire-seconds: 7200
+  ai:
+    provider: ${AI_PROVIDER:rule}
+    paid-enabled: ${AI_PAID_ENABLED:false}
+    paid:
+      base-url: ${AI_PAID_BASE_URL:}
+      api-key: ${AI_PAID_API_KEY:}
+      model: ${AI_PAID_MODEL:}
+    rule:
+      low-stock-threshold: ${AI_RULE_LOW_STOCK_THRESHOLD:10}
+      abnormal-change-threshold: ${AI_RULE_ABNORMAL_CHANGE_THRESHOLD:100}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui/index.html
