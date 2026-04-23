@@ -30,6 +30,3 @@ docker compose up --build
 - Vue 示例: `frontend-vue/.env.example`
 - Docker Compose 中默认使用:
   - `VITE_API_BASE_URL=http://localhost:18080/api/v1`
-
-## 说明
-- 旧 Next.js 前端已进入清理流程，当前运行入口以 Vue 为准。
