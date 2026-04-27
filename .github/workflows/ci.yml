@@ -1,0 +1,186 @@
+﻿name: NovaDepot CI
+
+on:
+  pull_request:
+    branches:
+      - "**"
+  workflow_dispatch:
+
+jobs:
+  backend-smoke:
+    name: Backend Smoke
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: novadepot
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Install mysql client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mysql-client
+
+      - name: Init database schema and seed
+        run: |
+          for i in {1..30}; do
+            if mysql -h127.0.0.1 -P3306 -uroot -proot -e "SELECT 1" >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+          mysql -h127.0.0.1 -P3306 -uroot -proot novadepot < backend/deploy/mysql/init/01-schema-iam-master.sql
+          mysql -h127.0.0.1 -P3306 -uroot -proot novadepot < backend/deploy/mysql/init/02-schema-wms.sql
+          mysql -h127.0.0.1 -P3306 -uroot -proot novadepot < backend/deploy/mysql/init/03-schema-erp-system-ai-cs.sql
+          mysql -h127.0.0.1 -P3306 -uroot -proot novadepot < backend/deploy/mysql/init/99-seed-mvp.sql
+
+      - name: Run backend smoke tests
+        run: |
+          mvn -f backend/pom.xml test -Dspring.profiles.active=test -Dspring.datasource.url="jdbc:mysql://127.0.0.1:3306/novadepot?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_0900_ai_ci&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true" -Dspring.datasource.username=root -Dspring.datasource.password=root -Dspring.data.redis.host=127.0.0.1 -Dspring.data.redis.port=6379
+
+  frontend-e2e:
+    name: Frontend E2E
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: novadepot
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend-vue/package-lock.json
+
+      - name: Install mysql client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mysql-client
+
+      - name: Init database schema and seed
+        run: |
+          for i in {1..30}; do
+            if mysql -h127.0.0.1 -P3306 -uroot -proot -e "SELECT 1" >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+          mysql -h127.0.0.1 -P3306 -uroot -proot novadepot < backend/deploy/mysql/init/01-schema-iam-master.sql
+          mysql -h127.0.0.1 -P3306 -uroot -proot novadepot < backend/deploy/mysql/init/02-schema-wms.sql
+          mysql -h127.0.0.1 -P3306 -uroot -proot novadepot < backend/deploy/mysql/init/03-schema-erp-system-ai-cs.sql
+          mysql -h127.0.0.1 -P3306 -uroot -proot novadepot < backend/deploy/mysql/init/99-seed-mvp.sql
+
+      - name: Build backend jar
+        run: mvn -f backend/pom.xml -DskipTests package
+
+      - name: Start backend
+        run: |
+          nohup java -jar backend/target/backend-0.1.0.jar --spring.profiles.active=test --spring.datasource.url="jdbc:mysql://127.0.0.1:3306/novadepot?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_0900_ai_ci&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true" --spring.datasource.username=root --spring.datasource.password=root --spring.data.redis.host=127.0.0.1 --spring.data.redis.port=6379 > backend.log 2>&1 &
+          for i in {1..60}; do
+            if curl -fsS http://127.0.0.1:8080/v3/api-docs >/dev/null; then
+              echo "Backend is ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Backend failed to start"
+          tail -n 200 backend.log
+          exit 1
+
+      - name: Install frontend deps
+        working-directory: frontend-vue
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('frontend-vue/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
+      - name: Install Playwright browser
+        working-directory: frontend-vue
+        run: npx playwright install --with-deps chromium
+
+      - name: Run frontend E2E
+        working-directory: frontend-vue
+        env:
+          VITE_API_BASE_URL: http://127.0.0.1:8080/api/v1
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:5173
+          E2E_API_BASE_URL: http://127.0.0.1:8080/api/v1
+        run: npm run test:e2e
+
+      - name: Upload Playwright report (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            frontend-vue/playwright-report
+            frontend-vue/test-results
+
+      - name: Upload backend log (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-log
+          path: backend.log

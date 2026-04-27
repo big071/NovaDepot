@@ -25,9 +25,28 @@ public class LocationsController {
         return ApiResponse.success(service.list(warehouseId), MDC.get("traceId"));
     }
 
+    @GetMapping("/{id}")
+    @RequirePermission("LOCATION_READ")
+    public ApiResponse<WarehouseLocationEntity> detail(@PathVariable Long id) {
+        return ApiResponse.success(service.detail(id), MDC.get("traceId"));
+    }
+
+    @GetMapping("/code/{locationCode}")
+    @RequirePermission("LOCATION_READ")
+    public ApiResponse<WarehouseLocationEntity> detailByCode(@PathVariable String locationCode) {
+        return ApiResponse.success(service.detailByCode(locationCode), MDC.get("traceId"));
+    }
+
     @PostMapping
     @RequirePermission("LOCATION_CREATE")
     public ApiResponse<Map<String, Object>> create(@Valid @RequestBody LocationCreateRequest request) {
         return ApiResponse.success(service.create(request), MDC.get("traceId"));
+    }
+
+    @PutMapping("/{id}")
+    @RequirePermission("LOCATION_UPDATE")
+    public ApiResponse<Map<String, Object>> update(@PathVariable Long id,
+                                                   @Valid @RequestBody LocationCreateRequest request) {
+        return ApiResponse.success(service.update(id, request), MDC.get("traceId"));
     }
 }

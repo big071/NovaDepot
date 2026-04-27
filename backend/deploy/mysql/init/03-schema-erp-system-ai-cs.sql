@@ -236,6 +236,78 @@ CREATE TABLE IF NOT EXISTS customer_service_messages (
   KEY idx_cs_msg_session (tenant_id, session_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE IF NOT EXISTS business_history_events (
+  id BIGINT PRIMARY KEY,
+  tenant_id BIGINT NOT NULL,
+  resource_type VARCHAR(64) NOT NULL,
+  resource_id VARCHAR(64) NOT NULL,
+  biz_no VARCHAR(64) NULL,
+  action VARCHAR(64) NOT NULL,
+  action_label VARCHAR(128) NOT NULL,
+  status_from VARCHAR(32) NULL,
+  status_to VARCHAR(32) NULL,
+  note VARCHAR(500) NULL,
+  operator_id BIGINT NULL,
+  operator_name VARCHAR(64) NULL,
+  occurred_at DATETIME(3) NOT NULL,
+  created_at DATETIME(3) NOT NULL,
+  created_by BIGINT NULL,
+  updated_at DATETIME(3) NOT NULL,
+  updated_by BIGINT NULL,
+  deleted TINYINT(1) NOT NULL DEFAULT 0,
+  KEY idx_bhe_resource_time (tenant_id, resource_type, resource_id, occurred_at),
+  KEY idx_bhe_biz_no (tenant_id, biz_no, occurred_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS customer_service_tickets (
+  id BIGINT PRIMARY KEY,
+  tenant_id BIGINT NOT NULL,
+  ticket_no VARCHAR(64) NOT NULL,
+  session_id BIGINT NOT NULL,
+  priority VARCHAR(16) NOT NULL DEFAULT 'MEDIUM',
+  content TEXT NOT NULL,
+  status VARCHAR(32) NOT NULL DEFAULT 'OPEN',
+  assignee_user_id BIGINT NULL,
+  remark VARCHAR(500) NULL,
+  created_at DATETIME(3) NOT NULL,
+  created_by BIGINT NULL,
+  updated_at DATETIME(3) NOT NULL,
+  updated_by BIGINT NULL,
+  deleted TINYINT(1) NOT NULL DEFAULT 0,
+  UNIQUE KEY uk_tenant_cs_ticket_no (tenant_id, ticket_no),
+  KEY idx_cs_ticket_session (tenant_id, session_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+SET @stmt = (
+  SELECT IF(
+    COUNT(*) = 0,
+    'ALTER TABLE customer_service_tickets ADD COLUMN assignee_user_id BIGINT NULL AFTER status',
+    'SELECT 1'
+  )
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE()
+    AND table_name = 'customer_service_tickets'
+    AND column_name = 'assignee_user_id'
+);
+PREPARE s3 FROM @stmt;
+EXECUTE s3;
+DEALLOCATE PREPARE s3;
+
+SET @stmt = (
+  SELECT IF(
+    COUNT(*) = 0,
+    'ALTER TABLE customer_service_tickets ADD COLUMN remark VARCHAR(500) NULL AFTER assignee_user_id',
+    'SELECT 1'
+  )
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE()
+    AND table_name = 'customer_service_tickets'
+    AND column_name = 'remark'
+);
+PREPARE s4 FROM @stmt;
+EXECUTE s4;
+DEALLOCATE PREPARE s4;
+
 CREATE TABLE IF NOT EXISTS customer_service_rules (
   id BIGINT PRIMARY KEY,
   tenant_id BIGINT NOT NULL,
@@ -272,4 +344,128 @@ CREATE TABLE IF NOT EXISTS faq_knowledge (
   deleted TINYINT(1) NOT NULL DEFAULT 0,
   UNIQUE KEY uk_tenant_faq_code (tenant_id, faq_code),
   KEY idx_faq_scene (tenant_id, scene, enabled)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+SET @stmt = (
+  SELECT IF(
+    COUNT(*) = 0,
+    'ALTER TABLE faq_knowledge ADD COLUMN review_status VARCHAR(16) NOT NULL DEFAULT ''APPROVED'' AFTER enabled',
+    'SELECT 1'
+  )
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE()
+    AND table_name = 'faq_knowledge'
+    AND column_name = 'review_status'
+);
+PREPARE s5 FROM @stmt;
+EXECUTE s5;
+DEALLOCATE PREPARE s5;
+
+SET @stmt = (
+  SELECT IF(
+    COUNT(*) = 0,
+    'ALTER TABLE faq_knowledge ADD COLUMN source_type VARCHAR(32) NULL AFTER version_no',
+    'SELECT 1'
+  )
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE()
+    AND table_name = 'faq_knowledge'
+    AND column_name = 'source_type'
+);
+PREPARE s6 FROM @stmt;
+EXECUTE s6;
+DEALLOCATE PREPARE s6;
+
+SET @stmt = (
+  SELECT IF(
+    COUNT(*) = 0,
+    'ALTER TABLE faq_knowledge ADD COLUMN source_ref_id VARCHAR(64) NULL AFTER source_type',
+    'SELECT 1'
+  )
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE()
+    AND table_name = 'faq_knowledge'
+    AND column_name = 'source_ref_id'
+);
+PREPARE s7 FROM @stmt;
+EXECUTE s7;
+DEALLOCATE PREPARE s7;
+
+CREATE TABLE IF NOT EXISTS sop_knowledge (
+  id BIGINT PRIMARY KEY,
+  tenant_id BIGINT NOT NULL,
+  sop_code VARCHAR(64) NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  scene VARCHAR(64) NULL,
+  steps TEXT NOT NULL,
+  risks TEXT NULL,
+  review_checks TEXT NULL,
+  tags VARCHAR(255) NULL,
+  priority INT NOT NULL DEFAULT 0,
+  enabled TINYINT(1) NOT NULL DEFAULT 1,
+  review_status VARCHAR(16) NOT NULL DEFAULT 'APPROVED',
+  source_type VARCHAR(32) NULL,
+  source_ref_id VARCHAR(64) NULL,
+  created_at DATETIME(3) NOT NULL,
+  created_by BIGINT NULL,
+  updated_at DATETIME(3) NOT NULL,
+  updated_by BIGINT NULL,
+  deleted TINYINT(1) NOT NULL DEFAULT 0,
+  UNIQUE KEY uk_tenant_sop_code (tenant_id, sop_code),
+  KEY idx_sop_scene (tenant_id, scene, enabled, review_status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS rule_configs (
+  id BIGINT PRIMARY KEY,
+  tenant_id BIGINT NOT NULL,
+  config_key VARCHAR(64) NOT NULL,
+  config_name VARCHAR(128) NOT NULL,
+  config_value TEXT NOT NULL,
+  value_type VARCHAR(16) NOT NULL DEFAULT 'TEXT',
+  scene VARCHAR(64) NULL,
+  remark VARCHAR(500) NULL,
+  enabled TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME(3) NOT NULL,
+  created_by BIGINT NULL,
+  updated_at DATETIME(3) NOT NULL,
+  updated_by BIGINT NULL,
+  deleted TINYINT(1) NOT NULL DEFAULT 0,
+  UNIQUE KEY uk_tenant_rule_config_key (tenant_id, config_key),
+  KEY idx_rule_config_scene (tenant_id, scene, enabled)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS import_error_reports (
+  id BIGINT PRIMARY KEY,
+  tenant_id BIGINT NOT NULL,
+  module VARCHAR(64) NOT NULL,
+  report_id VARCHAR(64) NOT NULL,
+  content LONGTEXT NOT NULL,
+  created_at DATETIME(3) NOT NULL,
+  created_by BIGINT NULL,
+  updated_at DATETIME(3) NOT NULL,
+  updated_by BIGINT NULL,
+  deleted TINYINT(1) NOT NULL DEFAULT 0,
+  UNIQUE KEY uk_tenant_module_report (tenant_id, module, report_id),
+  KEY idx_report_created (tenant_id, module, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS agent_task_runs (
+  id BIGINT PRIMARY KEY,
+  tenant_id BIGINT NOT NULL,
+  task_code VARCHAR(64) NOT NULL,
+  task_name VARCHAR(128) NOT NULL,
+  status VARCHAR(32) NOT NULL,
+  target_json JSON NULL,
+  steps_json JSON NULL,
+  result_json JSON NULL,
+  error_message VARCHAR(1000) NULL,
+  started_at DATETIME(3) NOT NULL,
+  finished_at DATETIME(3) NULL,
+  created_at DATETIME(3) NOT NULL,
+  created_by BIGINT NULL,
+  updated_at DATETIME(3) NOT NULL,
+  updated_by BIGINT NULL,
+  deleted TINYINT(1) NOT NULL DEFAULT 0,
+  KEY idx_agent_task_runs_tenant_task_time (tenant_id, task_code, started_at),
+  KEY idx_agent_task_runs_tenant_status_time (tenant_id, status, started_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

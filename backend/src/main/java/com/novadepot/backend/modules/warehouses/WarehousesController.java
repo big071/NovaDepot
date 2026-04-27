@@ -31,9 +31,22 @@ public class WarehousesController {
         return ApiResponse.success(service.detail(id), MDC.get("traceId"));
     }
 
+    @GetMapping("/code/{warehouseCode}")
+    @RequirePermission("WAREHOUSE_READ")
+    public ApiResponse<WarehouseEntity> detailByCode(@PathVariable String warehouseCode) {
+        return ApiResponse.success(service.detailByCode(warehouseCode), MDC.get("traceId"));
+    }
+
     @PostMapping
     @RequirePermission("WAREHOUSE_CREATE")
     public ApiResponse<Map<String, Object>> create(@Valid @RequestBody WarehouseCreateRequest request) {
         return ApiResponse.success(service.create(request), MDC.get("traceId"));
+    }
+
+    @PutMapping("/{id}")
+    @RequirePermission("WAREHOUSE_UPDATE")
+    public ApiResponse<Map<String, Object>> update(@PathVariable Long id,
+                                                   @Valid @RequestBody WarehouseCreateRequest request) {
+        return ApiResponse.success(service.update(id, request), MDC.get("traceId"));
     }
 }

@@ -9,6 +9,11 @@
 
 server:
   port: 8080
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
 
 mybatis-plus:
   global-config:
@@ -28,6 +33,18 @@ app:
   jwt:
     secret: ${JWT_SECRET:change_me_in_dev_please_change}
     expire-seconds: 7200
+  auth:
+    password:
+      min-length: ${APP_AUTH_PASSWORD_MIN_LENGTH:8}
+      enforce-strength-on-login: ${APP_AUTH_ENFORCE_STRENGTH_ON_LOGIN:false}
+      require-uppercase: ${APP_AUTH_PASSWORD_REQUIRE_UPPERCASE:true}
+      require-lowercase: ${APP_AUTH_PASSWORD_REQUIRE_LOWERCASE:true}
+      require-digit: ${APP_AUTH_PASSWORD_REQUIRE_DIGIT:true}
+      require-special: ${APP_AUTH_PASSWORD_REQUIRE_SPECIAL:false}
+      deny-username-contains: ${APP_AUTH_PASSWORD_DENY_USERNAME_CONTAINS:true}
+    login:
+      fail-max-attempts: ${APP_AUTH_LOGIN_FAIL_MAX_ATTEMPTS:5}
+      lock-minutes: ${APP_AUTH_LOGIN_LOCK_MINUTES:15}
   ai:
     provider: ${AI_PROVIDER:rule}
     paid-enabled: ${AI_PAID_ENABLED:false}
@@ -38,6 +55,12 @@ app:
     rule:
       low-stock-threshold: ${AI_RULE_LOW_STOCK_THRESHOLD:10}
       abnormal-change-threshold: ${AI_RULE_ABNORMAL_CHANGE_THRESHOLD:100}
+    deepseek:
+      enabled: ${AI_DEEPSEEK_ENABLED:false}
+      base-url: ${AI_DEEPSEEK_BASE_URL:https://api.deepseek.com}
+      api-key: ${AI_DEEPSEEK_API_KEY:}
+      chat-model: ${AI_DEEPSEEK_CHAT_MODEL:deepseek-chat}
+      reasoner-model: ${AI_DEEPSEEK_REASONER_MODEL:deepseek-reasoner}
 
 springdoc:
   api-docs:

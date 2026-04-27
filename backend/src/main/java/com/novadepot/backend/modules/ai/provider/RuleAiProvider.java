@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.novadepot.backend.common.context.RequestContext;
 import com.novadepot.backend.model.entity.InventoryEntity;
 import com.novadepot.backend.model.entity.InventoryTransactionEntity;
+import com.novadepot.backend.model.entity.ProductEntity;
+import com.novadepot.backend.modules.inventory.LowStockPolicyService;
 import com.novadepot.backend.repository.InventoryMapper;
 import com.novadepot.backend.repository.InventoryTransactionMapper;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,7 +16,6 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -26,15 +27,18 @@ public class RuleAiProvider implements AiProvider {
 
     private final InventoryMapper inventoryMapper;
     private final InventoryTransactionMapper inventoryTransactionMapper;
+    private final LowStockPolicyService lowStockPolicyService;
     private final BigDecimal lowStockThreshold;
     private final BigDecimal abnormalChangeThreshold;
 
     public RuleAiProvider(InventoryMapper inventoryMapper,
                           InventoryTransactionMapper inventoryTransactionMapper,
+                          LowStockPolicyService lowStockPolicyService,
                           @Value("${app.ai.rule.low-stock-threshold:10}") BigDecimal lowStockThreshold,
                           @Value("${app.ai.rule.abnormal-change-threshold:100}") BigDecimal abnormalChangeThreshold) {
         this.inventoryMapper = inventoryMapper;
         this.inventoryTransactionMapper = inventoryTransactionMapper;
+        this.lowStockPolicyService = lowStockPolicyService;
         this.lowStockThreshold = lowStockThreshold;
         this.abnormalChangeThreshold = abnormalChangeThreshold;
     }
@@ -74,7 +78,7 @@ public class RuleAiProvider implements AiProvider {
         }
 
         return Map.of(
-                "reply", "已识别到这是通用问题。当前免费阶段建议提问：库存概览、低库存分析、补货建议、异常库存、日报/周报、SOP。",
+                "reply", "已识别为通用咨询。当前可提问：库存概览、低库存分析、补货建议、异常波动、日报周报、SOP。",
                 "scene", scene,
                 "provider", providerName(),
                 "confidence", 0.72
@@ -83,15 +87,19 @@ public class RuleAiProvider implements AiProvider {
 
     private Map<String, Object> inventoryOverview(String scene) {
         List<InventoryEntity> rows = inventoryRows();
+        Map<Long, ProductEntity> productMap = lowStockPolicyService.buildProductMapFromInventory(rows);
         BigDecimal totalAvailable = rows.stream()
                 .map(InventoryEntity::getAvailableQty)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+        long lowStockCount = lowStockPolicyService.countLowStock(rows, productMap);
+        BigDecimal threshold = lowStockPolicyService.defaultThreshold();
 
         String reply = String.format(
-                "库存概览：共 %d 个库存点，可用库存合计 %s。建议优先关注低于阈值 %s 的SKU。",
+                "库存概览：共 %d 个库存点，可用库存合计 %s。低库存 %d 个（口径：优先按商品安全库存，缺省阈值 %s）。",
                 rows.size(),
                 totalAvailable.setScale(2, RoundingMode.HALF_UP).toPlainString(),
-                lowStockThreshold.setScale(2, RoundingMode.HALF_UP).toPlainString()
+                lowStockCount,
+                threshold.setScale(2, RoundingMode.HALF_UP).toPlainString()
         );
 
         return Map.of(
@@ -102,25 +110,32 @@ public class RuleAiProvider implements AiProvider {
                 "metrics", Map.of(
                         "inventoryPoints", rows.size(),
                         "totalAvailable", totalAvailable,
-                        "lowStockThreshold", lowStockThreshold
+                        "lowStockCount", lowStockCount,
+                        "lowStockThreshold", threshold
                 )
         );
     }
 
     private Map<String, Object> lowStockAnalysis(String scene) {
-        List<InventoryEntity> lowRows = inventoryRows().stream()
-                .filter(i -> i.getAvailableQty() != null && i.getAvailableQty().compareTo(lowStockThreshold) <= 0)
-                .sorted(Comparator.comparing(InventoryEntity::getAvailableQty))
-                .limit(5)
-                .toList();
+        List<InventoryEntity> rows = inventoryRows();
+        Map<Long, ProductEntity> productMap = lowStockPolicyService.buildProductMapFromInventory(rows);
+        long lowStockCount = lowStockPolicyService.countLowStock(rows, productMap);
+        BigDecimal threshold = lowStockPolicyService.defaultThreshold();
+        List<InventoryEntity> lowRows = lowStockPolicyService.filterLowStock(rows, productMap).stream().limit(5).toList();
 
         String items = lowRows.stream()
-                .map(i -> "商品" + i.getProductId() + "(可用:" + i.getAvailableQty().stripTrailingZeros().toPlainString() + ")")
-                .collect(Collectors.joining("，"));
+                .map(i -> {
+                    ProductEntity p = productMap.get(i.getProductId());
+                    BigDecimal productThreshold = lowStockPolicyService.thresholdForProduct(p);
+                    String productLabel = p == null ? ("商品" + i.getProductId()) : (p.getProductCode() + "/" + p.getProductName());
+                    return productLabel + "(可用:" + i.getAvailableQty().stripTrailingZeros().toPlainString()
+                            + ",安全库存:" + productThreshold.stripTrailingZeros().toPlainString() + ")";
+                })
+                .collect(Collectors.joining("；"));
 
         String reply = lowRows.isEmpty()
-                ? "当前未发现低库存SKU，可继续按日巡检库存阈值。"
-                : "低库存分析完成，Top风险SKU：" + items + "。建议优先补货并核查在途库存。";
+                ? "当前未发现低库存 SKU，可继续按日巡检库存阈值。"
+                : "低库存分析完成，风险 TOP SKU：" + items + "。建议优先补货并核查在途库存。";
 
         return Map.of(
                 "reply", reply,
@@ -128,39 +143,63 @@ public class RuleAiProvider implements AiProvider {
                 "provider", providerName(),
                 "confidence", lowRows.isEmpty() ? 0.88 : 0.93,
                 "metrics", Map.of(
-                        "lowStockCount", lowRows.size(),
-                        "threshold", lowStockThreshold
+                        "lowStockCount", lowStockCount,
+                        "previewCount", lowRows.size(),
+                        "threshold", threshold
                 )
         );
     }
 
     private Map<String, Object> replenishSuggestion(String scene) {
-        List<Map<String, Object>> suggestions = inventoryRows().stream()
-                .filter(i -> i.getAvailableQty() != null && i.getAvailableQty().compareTo(lowStockThreshold) < 0)
-                .sorted(Comparator.comparing(InventoryEntity::getAvailableQty))
-                .limit(5)
-                .map(i -> {
-                    BigDecimal shortage = lowStockThreshold.subtract(i.getAvailableQty()).max(BigDecimal.ZERO);
-                    return Map.<String, Object>of(
-                            "productId", i.getProductId(),
-                            "warehouseId", i.getWarehouseId(),
-                            "locationId", i.getLocationId(),
-                            "currentQty", i.getAvailableQty(),
-                            "suggestReplenishQty", shortage
-                    );
-                })
-                .toList();
+        List<InventoryEntity> rows = inventoryRows();
+        Map<Long, ProductEntity> productMap = lowStockPolicyService.buildProductMapFromInventory(rows);
+        List<InventoryEntity> candidateRows = lowStockPolicyService.filterLowStock(rows, productMap).stream().limit(8).toList();
+
+        List<Map<String, Object>> suggestions = new ArrayList<>();
+        int factFailedCount = 0;
+
+        for (InventoryEntity i : candidateRows) {
+            ProductEntity p = productMap.get(i.getProductId());
+            Map<String, Object> factValidation = lowStockPolicyService.buildSuggestionFactValidation(i, p);
+            boolean passed = Boolean.TRUE.equals(factValidation.get("passed"));
+            if (!passed) {
+                factFailedCount++;
+                continue;
+            }
+
+            BigDecimal threshold = lowStockPolicyService.thresholdForProduct(p);
+            BigDecimal shortage = threshold.subtract(i.getAvailableQty()).max(BigDecimal.ZERO);
+            suggestions.add(Map.of(
+                    "productId", i.getProductId(),
+                    "productCode", p == null ? "" : p.getProductCode(),
+                    "productName", p == null ? "" : p.getProductName(),
+                    "warehouseId", i.getWarehouseId(),
+                    "locationId", i.getLocationId(),
+                    "currentQty", i.getAvailableQty(),
+                    "safetyStock", threshold,
+                    "suggestReplenishQty", shortage,
+                    "factValidation", factValidation
+            ));
+
+            if (suggestions.size() >= 5) {
+                break;
+            }
+        }
 
         String reply = suggestions.isEmpty()
-                ? "当前库存充足，无需立即补货。"
-                : "补货建议已生成：优先按建议补货量处理前5个低库存SKU。";
+                ? "当前库存充足或事实校验未通过，暂无可执行补货建议。"
+                : "补货建议已生成：优先处理前 5 个低库存 SKU，且均通过事实引用校验。";
 
         return Map.of(
                 "reply", reply,
                 "scene", scene,
                 "provider", providerName(),
                 "confidence", 0.89,
-                "suggestions", suggestions
+                "suggestions", suggestions,
+                "metrics", Map.of(
+                        "suggestionCount", suggestions.size(),
+                        "factValidationFailedCount", factFailedCount
+                )
         );
     }
 
@@ -178,11 +217,11 @@ public class RuleAiProvider implements AiProvider {
                 .toList();
 
         String detail = abnormal.stream()
-                .map(t -> t.getBizNo() + "/商品" + t.getProductId() + " 变动" + t.getChangeQty().stripTrailingZeros().toPlainString())
+                .map(t -> t.getBizNo() + "/商品" + t.getProductId() + " 变动 " + t.getChangeQty().stripTrailingZeros().toPlainString())
                 .collect(Collectors.joining("；"));
 
         String reply = abnormal.isEmpty()
-                ? "近3天未发现明显异常库存波动。"
+                ? "近 3 天未发现明显异常库存波动。"
                 : "检测到疑似异常库存波动：" + detail + "。建议复核对应单据与操作人。";
 
         return Map.of(
@@ -215,7 +254,7 @@ public class RuleAiProvider implements AiProvider {
 
         BigDecimal net = inboundQty.subtract(outboundQty);
         String reply = String.format(
-                "%s（%s ~ %s）：入库 %s，出库 %s，净变化 %s。建议关注高频出库SKU与低库存联动。",
+                "%s（%s ~ %s）：入库 %s，出库 %s，净变化 %s。建议关注高频出库 SKU 与低库存联动。",
                 title,
                 since.format(TIME_FMT),
                 LocalDateTime.now().format(TIME_FMT),
@@ -242,13 +281,13 @@ public class RuleAiProvider implements AiProvider {
     private Map<String, Object> sopAnswer(String scene, String normalized) {
         String sop;
         if (hasAny(normalized, "入库")) {
-            sop = "入库SOP：到货核对 -> 质检 -> 上架分配库位 -> 入账 -> 抽检复核。";
+            sop = "入库 SOP：到货核对 -> 质检 -> 上架分配库位 -> 入账 -> 抽检复核。";
         } else if (hasAny(normalized, "出库")) {
-            sop = "出库SOP：拣货波次 -> 复核 -> 打包 -> 发运登记 -> 回写出库单。";
+            sop = "出库 SOP：拣货波次 -> 复核 -> 打包 -> 发运登记 -> 回写出库单。";
         } else if (hasAny(normalized, "盘点")) {
-            sop = "盘点SOP：冻结范围 -> 现场盘点 -> 差异复核 -> 审批调整 -> 盘点归档。";
+            sop = "盘点 SOP：冻结范围 -> 现场盘点 -> 差异复核 -> 审批调整 -> 盘点归档。";
         } else {
-            sop = "通用SOP建议：明确责任人、标准步骤、复核节点与异常升级路径。";
+            sop = "通用 SOP 建议：明确责任人、标准步骤、复核节点与异常升级路径。";
         }
 
         return Map.of(
@@ -261,9 +300,8 @@ public class RuleAiProvider implements AiProvider {
 
     private Map<String, Object> enterpriseAdvice(String scene) {
         List<InventoryEntity> rows = inventoryRows();
-        long lowCount = rows.stream()
-                .filter(i -> i.getAvailableQty() != null && i.getAvailableQty().compareTo(lowStockThreshold) <= 0)
-                .count();
+        Map<Long, ProductEntity> productMap = lowStockPolicyService.buildProductMapFromInventory(rows);
+        long lowCount = lowStockPolicyService.countLowStock(rows, productMap);
 
         BigDecimal ratio = rows.isEmpty()
                 ? BigDecimal.ZERO
@@ -273,7 +311,7 @@ public class RuleAiProvider implements AiProvider {
 
         List<String> advices = new ArrayList<>();
         if (ratio.compareTo(BigDecimal.valueOf(20)) >= 0) {
-            advices.add("低库存占比较高，建议先补齐高周转SKU安全库存。");
+            advices.add("低库存占比较高，建议先补齐高周转 SKU 安全库存。");
         }
         advices.add("建立采购补货周期与销量联动阈值，减少缺货与积压并存。");
         advices.add("按仓库维度监控出入库峰值，优化人力与波次策略。");
@@ -287,7 +325,8 @@ public class RuleAiProvider implements AiProvider {
                 "confidence", 0.79,
                 "metrics", Map.of(
                         "lowStockRatioPct", ratio,
-                        "inventoryPoints", rows.size()
+                        "inventoryPoints", rows.size(),
+                        "thresholdRule", "商品规格中的“安全库存”优先，缺省阈值 10"
                 )
         );
     }

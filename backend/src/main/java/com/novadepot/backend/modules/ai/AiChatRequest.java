@@ -4,6 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 
 public class AiChatRequest {
     private Long conversationId;
+    private String conversationNo;
     private String scene;
     @NotBlank(message = "message不能为空")
     private String message;
@@ -15,6 +16,14 @@ public class AiChatRequest {
 
     public void setConversationId(Long conversationId) {
         this.conversationId = conversationId;
+    }
+
+    public String getConversationNo() {
+        return conversationNo;
+    }
+
+    public void setConversationNo(String conversationNo) {
+        this.conversationNo = conversationNo;
     }
 
     public String getScene() {

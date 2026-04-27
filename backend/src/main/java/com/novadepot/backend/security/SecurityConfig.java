@@ -22,10 +22,14 @@ import java.util.List;
 @EnableConfigurationProperties(JwtProperties.class)
 public class SecurityConfig {
     private final JwtAuthFilter jwtAuthFilter;
+    private final ForcePasswordChangeFilter forcePasswordChangeFilter;
     private final RestAuthHandlers restAuthHandlers;
 
-    public SecurityConfig(JwtAuthFilter jwtAuthFilter, RestAuthHandlers restAuthHandlers) {
+    public SecurityConfig(JwtAuthFilter jwtAuthFilter,
+                          ForcePasswordChangeFilter forcePasswordChangeFilter,
+                          RestAuthHandlers restAuthHandlers) {
         this.jwtAuthFilter = jwtAuthFilter;
+        this.forcePasswordChangeFilter = forcePasswordChangeFilter;
         this.restAuthHandlers = restAuthHandlers;
     }
 
@@ -47,7 +51,8 @@ public class SecurityConfig {
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint(restAuthHandlers)
                         .accessDeniedHandler(restAuthHandlers))
-                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(forcePasswordChangeFilter, JwtAuthFilter.class);
         return http.build();
     }
 

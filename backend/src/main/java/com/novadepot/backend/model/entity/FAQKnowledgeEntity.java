@@ -20,5 +20,8 @@ public class FAQKnowledgeEntity extends BaseEntity {
     private String scene;
     private Integer priority;
     private Integer enabled;
+    private String reviewStatus;
     private Integer versionNo;
+    private String sourceType;
+    private String sourceRefId;
 }

@@ -5,7 +5,11 @@ import com.novadepot.backend.model.entity.InventoryEntity;
 import com.novadepot.backend.model.entity.InventoryTransactionEntity;
 import com.novadepot.backend.security.permission.RequirePermission;
 import org.slf4j.MDC;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -36,5 +40,26 @@ public class InventoryController {
     @RequirePermission("INVENTORY_ALERT_READ")
     public ApiResponse<List<InventoryEntity>> lowStockAlerts() {
         return ApiResponse.success(service.lowStockAlerts(), MDC.get("traceId"));
+    }
+
+    @GetMapping(value = "/export", produces = "text/csv;charset=UTF-8")
+    @RequirePermission("INVENTORY_EXPORT")
+    public ResponseEntity<String> exportCsv() {
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("text/csv;charset=UTF-8"))
+                .header("Content-Disposition", "attachment; filename=inventory.csv")
+                .body(service.exportCsv());
+    }
+
+    @GetMapping("/export/fields")
+    @RequirePermission("INVENTORY_EXPORT")
+    public ApiResponse<List<String>> exportFields() {
+        return ApiResponse.success(service.exportFieldDescriptions(), MDC.get("traceId"));
+    }
+
+    @PostMapping(value = "/import", consumes = {"text/csv", "text/plain"})
+    @RequirePermission("INVENTORY_IMPORT")
+    public ApiResponse<java.util.Map<String, Object>> importCsv(@RequestBody String csvContent) {
+        return ApiResponse.success(service.importCsv(csvContent), MDC.get("traceId"));
     }
 }

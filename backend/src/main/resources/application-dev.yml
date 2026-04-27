@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:mysql://localhost:3306/novadepot?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://localhost:3306/novadepot?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_0900_ai_ci&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     username: root
     password: root
   data:
@@ -13,3 +13,17 @@ logging:
   level:
     root: info
     com.novadepot.backend: debug
+
+app:
+  auth:
+    password:
+      min-length: ${APP_AUTH_PASSWORD_MIN_LENGTH:8}
+      enforce-strength-on-login: ${APP_AUTH_ENFORCE_STRENGTH_ON_LOGIN:false}
+      require-uppercase: ${APP_AUTH_PASSWORD_REQUIRE_UPPERCASE:true}
+      require-lowercase: ${APP_AUTH_PASSWORD_REQUIRE_LOWERCASE:true}
+      require-digit: ${APP_AUTH_PASSWORD_REQUIRE_DIGIT:true}
+      require-special: ${APP_AUTH_PASSWORD_REQUIRE_SPECIAL:false}
+      deny-username-contains: ${APP_AUTH_PASSWORD_DENY_USERNAME_CONTAINS:true}
+    login:
+      fail-max-attempts: ${APP_AUTH_LOGIN_FAIL_MAX_ATTEMPTS:5}
+      lock-minutes: ${APP_AUTH_LOGIN_LOCK_MINUTES:15}

@@ -1,0 +1,63 @@
+name: Nightly Scenario Consistency
+
+on:
+  schedule:
+    - cron: "0 18 * * *" # 02:00 Asia/Shanghai (next day)
+  workflow_dispatch:
+
+jobs:
+  scenario-consistency:
+    name: Reset Baseline And Run Release Checklist
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Start Docker services
+        run: |
+          docker compose up -d mysql redis backend frontend-vue
+
+      - name: Wait backend ready
+        run: |
+          for i in {1..90}; do
+            if curl -fsS http://127.0.0.1:18080/actuator/health >/dev/null; then
+              echo "backend ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "backend not ready in time"
+          exit 1
+
+      - name: Reset commercial baseline
+        shell: pwsh
+        run: ./scripts/ops/reset-commercial-baseline.ps1
+
+      - name: Run release checklist
+        shell: pwsh
+        run: ./scripts/ops/release-checklist.ps1
+
+      - name: Run data quality check
+        shell: pwsh
+        run: ./scripts/ops/data-quality-check.ps1
+
+      - name: Dump docker logs on failure
+        if: failure()
+        run: |
+          docker logs novadepot-backend > backend.log 2>&1 || true
+          docker logs novadepot-frontend-vue > frontend.log 2>&1 || true
+          docker logs novadepot-mysql > mysql.log 2>&1 || true
+          docker logs novadepot-redis > redis.log 2>&1 || true
+
+      - name: Upload docker logs (failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-docker-logs
+          path: |
+            backend.log
+            frontend.log
+            mysql.log
+            redis.log

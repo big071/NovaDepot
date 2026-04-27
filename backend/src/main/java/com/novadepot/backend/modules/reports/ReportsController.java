@@ -23,4 +23,9 @@ public class ReportsController {
     public ApiResponse<Map<String, Object>> dashboard() {
         return ApiResponse.success(service.dashboard(), MDC.get("traceId"));
     }
+
+    @GetMapping("/dashboard/todos")
+    public ApiResponse<Map<String, Object>> dashboardTodos() {
+        return ApiResponse.success(service.workbenchTodos(), MDC.get("traceId"));
+    }
 }

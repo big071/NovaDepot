@@ -31,4 +31,16 @@ public class AiController {
     public ApiResponse<List<Map<String, Object>>> conversations() {
         return ApiResponse.success(service.conversations(), MDC.get("traceId"));
     }
+
+    @GetMapping("/conversations/{id}/messages")
+    @RequirePermission("AI_CHAT")
+    public ApiResponse<List<Map<String, Object>>> conversationMessages(@PathVariable Long id) {
+        return ApiResponse.success(service.conversationMessages(id), MDC.get("traceId"));
+    }
+
+    @GetMapping("/conversations/by-no/{conversationNo}/messages")
+    @RequirePermission("AI_CHAT")
+    public ApiResponse<List<Map<String, Object>>> conversationMessagesByNo(@PathVariable String conversationNo) {
+        return ApiResponse.success(service.conversationMessagesByNo(conversationNo), MDC.get("traceId"));
+    }
 }

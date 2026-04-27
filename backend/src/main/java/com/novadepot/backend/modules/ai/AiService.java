@@ -7,6 +7,7 @@ import com.novadepot.backend.model.entity.AIConversationEntity;
 import com.novadepot.backend.model.entity.AIMessageEntity;
 import com.novadepot.backend.model.entity.AIPromptTemplateEntity;
 import com.novadepot.backend.modules.ai.provider.AiProvider;
+import com.novadepot.backend.modules.knowledge.KnowledgeService;
 import com.novadepot.backend.repository.AIConversationMapper;
 import com.novadepot.backend.repository.AIMessageMapper;
 import com.novadepot.backend.repository.AIPromptTemplateMapper;
@@ -31,6 +32,7 @@ public class AiService {
     private final AIConversationMapper conversationMapper;
     private final AIMessageMapper messageMapper;
     private final AIPromptTemplateMapper promptTemplateMapper;
+    private final KnowledgeService knowledgeService;
     private final String defaultProvider;
     private final boolean paidEnabled;
 
@@ -38,12 +40,14 @@ public class AiService {
                      AIConversationMapper conversationMapper,
                      AIMessageMapper messageMapper,
                      AIPromptTemplateMapper promptTemplateMapper,
+                     KnowledgeService knowledgeService,
                      @Value("${app.ai.provider:rule}") String defaultProvider,
                      @Value("${app.ai.paid-enabled:false}") boolean paidEnabled) {
         this.providers = providers;
         this.conversationMapper = conversationMapper;
         this.messageMapper = messageMapper;
         this.promptTemplateMapper = promptTemplateMapper;
+        this.knowledgeService = knowledgeService;
         this.defaultProvider = defaultProvider;
         this.paidEnabled = paidEnabled;
     }
@@ -70,6 +74,7 @@ public class AiService {
 
         long started = System.currentTimeMillis();
         Map<String, Object> providerResp;
+        List<Map<String, Object>> knowledgeRefs = knowledgeService.matchKnowledge(userMessage, knowledgeScene(scene));
         String fallbackFrom = null;
         try {
             providerResp = provider.chat(scene, providerInput, context);
@@ -112,6 +117,9 @@ public class AiService {
         if (providerResp.containsKey("suggestions")) {
             result.put("suggestions", providerResp.get("suggestions"));
         }
+        result.put("knowledgeRefs", knowledgeRefs);
+        result.put("knowledgeHit", !knowledgeRefs.isEmpty());
+        result.put("knowledgeFallbackNotice", knowledgeRefs.isEmpty() ? "未命中知识库，当前回答来自规则或模拟提供者。" : "");
         return result;
     }
 
@@ -129,6 +137,36 @@ public class AiService {
                 "status", c.getStatus(),
                 "startedAt", c.getStartedAt()
         )).toList();
+    }
+
+    public List<Map<String, Object>> conversationMessages(Long conversationId) {
+        return messageMapper.selectList(new LambdaQueryWrapper<AIMessageEntity>()
+                        .eq(AIMessageEntity::getTenantId, RequestContext.tenantId())
+                        .eq(AIMessageEntity::getConversationId, conversationId)
+                        .orderByAsc(AIMessageEntity::getId))
+                .stream()
+                .map(message -> Map.<String, Object>of(
+                        "id", message.getId(),
+                        "conversationId", message.getConversationId(),
+                        "role", message.getRole(),
+                        "content", message.getContent(),
+                        "tokens", message.getTokens() == null ? 0 : message.getTokens(),
+                        "latencyMs", message.getLatencyMs() == null ? 0 : message.getLatencyMs(),
+                        "confidence", message.getConfidence() == null ? BigDecimal.ZERO : message.getConfidence(),
+                        "errorCode", message.getErrorCode() == null ? "" : message.getErrorCode(),
+                        "createdAt", message.getCreatedAt()
+                )).toList();
+    }
+
+    public List<Map<String, Object>> conversationMessagesByNo(String conversationNo) {
+        AIConversationEntity conversation = conversationMapper.selectOne(new LambdaQueryWrapper<AIConversationEntity>()
+                .eq(AIConversationEntity::getTenantId, RequestContext.tenantId())
+                .eq(AIConversationEntity::getConversationNo, conversationNo)
+                .last("limit 1"));
+        if (conversation == null || conversation.getId() == null) {
+            return List.of();
+        }
+        return conversationMessages(conversation.getId());
     }
 
     private AIConversationEntity resolveConversation(Long conversationId, String scene, String providerName) {
@@ -189,6 +227,10 @@ public class AiService {
             return "enterprise";
         }
         return scene.trim().toLowerCase();
+    }
+
+    private String knowledgeScene(String scene) {
+        return "sop".equalsIgnoreCase(scene) ? "customer-service" : scene;
     }
 
     private String resolveProviderName(String providerHint) {

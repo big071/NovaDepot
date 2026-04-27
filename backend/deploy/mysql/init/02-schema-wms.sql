@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS inbound_order_items (
   inbound_order_id BIGINT NOT NULL,
   line_no INT NOT NULL,
   product_id BIGINT NOT NULL,
+  location_id BIGINT NULL,
   unit_id BIGINT NOT NULL,
   batch_no VARCHAR(64) NULL,
   production_date DATE NULL,
@@ -113,6 +114,7 @@ CREATE TABLE IF NOT EXISTS outbound_order_items (
   outbound_order_id BIGINT NOT NULL,
   line_no INT NOT NULL,
   product_id BIGINT NOT NULL,
+  location_id BIGINT NULL,
   unit_id BIGINT NOT NULL,
   batch_no VARCHAR(64) NULL,
   plan_qty DECIMAL(18,6) NOT NULL,
@@ -126,6 +128,36 @@ CREATE TABLE IF NOT EXISTS outbound_order_items (
   UNIQUE KEY uk_tenant_outbound_line (tenant_id, outbound_order_id, line_no),
   KEY idx_outbound_item_product (tenant_id, product_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+SET @stmt = (
+  SELECT IF(
+    COUNT(*) = 0,
+    'ALTER TABLE inbound_order_items ADD COLUMN location_id BIGINT NULL AFTER product_id',
+    'SELECT 1'
+  )
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE()
+    AND table_name = 'inbound_order_items'
+    AND column_name = 'location_id'
+);
+PREPARE s1 FROM @stmt;
+EXECUTE s1;
+DEALLOCATE PREPARE s1;
+
+SET @stmt = (
+  SELECT IF(
+    COUNT(*) = 0,
+    'ALTER TABLE outbound_order_items ADD COLUMN location_id BIGINT NULL AFTER product_id',
+    'SELECT 1'
+  )
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE()
+    AND table_name = 'outbound_order_items'
+    AND column_name = 'location_id'
+);
+PREPARE s2 FROM @stmt;
+EXECUTE s2;
+DEALLOCATE PREPARE s2;
 
 CREATE TABLE IF NOT EXISTS transfer_orders (
   id BIGINT PRIMARY KEY,

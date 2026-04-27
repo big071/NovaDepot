@@ -1,0 +1,51 @@
+# ====== IDE & Editor ======
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+*~
+
+# ====== Build Output ======
+backend/target/
+frontend-vue/dist/
+frontend-vue/node_modules/
+*.jar
+*.war
+
+# ====== Tools & Binaries ======
+tools/
+
+# ====== Temp & Debug ======
+tmp-*
+tmp-*.txt
+tmp-*.js
+tmp-*.cjs
+tmp-*.ps1
+tmp-*.log
+console.log*
+frontend-vue/tmp-*.cjs
+frontend-vue/tmp-*.js
+tmp-decompile/
+
+# ====== Test Results ======
+test-results/
+frontend-vue/test-results/
+
+# ====== Backups ======
+backups/
+
+# ====== OS Files ======
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ====== Environment (keep .example files) ======
+# .env files are NOT ignored - they are needed for Docker Compose
+
+# ====== Logs ======
+*.log
+
+# ====== Docker ======
+# Docker volumes should not be committed
+docker-volumes/

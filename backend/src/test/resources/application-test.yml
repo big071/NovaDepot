@@ -1,0 +1,23 @@
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:13306/novadepot?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_0900_ai_ci&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: root
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 0
+
+app:
+  jwt:
+    secret: change_me_in_test_please
+    expire-seconds: 7200
+  ai:
+    provider: rule
+    paid-enabled: false
+
+logging:
+  level:
+    root: info
+    com.novadepot.backend: info
