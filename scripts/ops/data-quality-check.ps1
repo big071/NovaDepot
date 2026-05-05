@@ -50,7 +50,7 @@ try {
   Assert-DockerReady
 
   Write-Host "[data-quality] 1/5 auth and api readiness"
-  $loginBody = @{ tenantCode = "default"; username = "admin"; password = "123456" } | ConvertTo-Json
+$loginBody = @{ tenantCode = "default"; username = "admin"; password = "admin123" } | ConvertTo-Json
   $loginResp = Invoke-RestMethod -Method Post -Uri "http://localhost:18080/api/v1/auth/login" -ContentType "application/json" -Body $loginBody
   Assert-SuccessCode $loginResp "login"
   $token = $loginResp.data.accessToken

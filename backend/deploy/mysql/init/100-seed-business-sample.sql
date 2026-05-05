@@ -41,6 +41,39 @@ VALUES
 (300403,1,'CUS-B2B-001','成都企业团购服务中心','宋岩','13677770003','B','ACTIVE',NOW(3),NOW(3),0)
 ON DUPLICATE KEY UPDATE customer_name=VALUES(customer_name), contact_name=VALUES(contact_name), phone=VALUES(phone), customer_level=VALUES(customer_level), status=VALUES(status), updated_at=NOW(3), deleted=0;
 
+INSERT INTO partners (id, tenant_id, partner_code, partner_name, partner_type, contact_name, phone, address, status, remark, created_at, created_by, updated_at, updated_by, deleted)
+VALUES
+(310001,1,'PTN-SW-FOOD','西南乳品供应链有限公司','SUPPLIER','刘成','13988880001','成都高新区供应链园区 8 号','ACTIVE','v1.1 采购供应商样例',NOW(3),1,NOW(3),1,0),
+(310002,1,'PTN-RETAIL-001','川渝连锁生活超市','CUSTOMER','赵宁','13677770001','重庆渝北配送中心 19 号','ACTIVE','v1.1 销售客户样例',NOW(3),1,NOW(3),1,0),
+(310003,1,'PTN-TRADE-001','成渝综合贸易伙伴','BOTH','周然','13866660003','成都青白江综合贸易园 6 号','ACTIVE','既可采购也可销售的双向往来单位',NOW(3),1,NOW(3),1,0)
+ON DUPLICATE KEY UPDATE partner_name=VALUES(partner_name), partner_type=VALUES(partner_type), contact_name=VALUES(contact_name), phone=VALUES(phone), address=VALUES(address), status=VALUES(status), remark=VALUES(remark), updated_at=NOW(3), deleted=0;
+
+INSERT INTO purchase_orders (id, tenant_id, purchase_no, status, partner_id, supplier_id, warehouse_id, total_amount, expected_arrival_date, remark, created_at, created_by, updated_at, updated_by, deleted)
+VALUES
+(320001,1,'PO-V11-DRAFT-001','DRAFT',310001,310001,300101,3360.00,DATE_ADD(CURDATE(), INTERVAL 3 DAY),'v1.1 采购草稿样例',NOW(3),2,NOW(3),2,0),
+(320002,1,'PO-V11-CONF-001','CONFIRMED',310003,310003,300101,1180.00,DATE_ADD(CURDATE(), INTERVAL 5 DAY),'v1.1 已确认采购样例',NOW(3),2,NOW(3),2,0)
+ON DUPLICATE KEY UPDATE status=VALUES(status), partner_id=VALUES(partner_id), supplier_id=VALUES(supplier_id), warehouse_id=VALUES(warehouse_id), total_amount=VALUES(total_amount), expected_arrival_date=VALUES(expected_arrival_date), remark=VALUES(remark), updated_at=NOW(3), deleted=0;
+
+INSERT INTO purchase_order_items (id, tenant_id, purchase_order_id, line_no, product_id, unit_price, order_qty, received_qty, tax_rate, created_at, created_by, updated_at, updated_by, deleted)
+VALUES
+(320101,1,320001,1,300501,18.00,120.000000,0.000000,0.0000,NOW(3),2,NOW(3),2,0),
+(320102,1,320001,2,300502,20.00,60.000000,0.000000,0.0000,NOW(3),2,NOW(3),2,0),
+(320103,1,320002,1,300503,11.80,100.000000,0.000000,0.0000,NOW(3),2,NOW(3),2,0)
+ON DUPLICATE KEY UPDATE product_id=VALUES(product_id), unit_price=VALUES(unit_price), order_qty=VALUES(order_qty), received_qty=VALUES(received_qty), tax_rate=VALUES(tax_rate), updated_at=NOW(3), deleted=0;
+
+INSERT INTO sales_orders (id, tenant_id, sales_no, status, partner_id, customer_id, warehouse_id, total_amount, delivery_date, remark, created_at, created_by, updated_at, updated_by, deleted)
+VALUES
+(330001,1,'SO-V11-DRAFT-001','DRAFT',310002,310002,300101,2190.00,DATE_ADD(CURDATE(), INTERVAL 2 DAY),'v1.1 销售草稿样例',NOW(3),2,NOW(3),2,0),
+(330002,1,'SO-V11-CONF-001','CONFIRMED',310003,310003,300101,980.00,DATE_ADD(CURDATE(), INTERVAL 4 DAY),'v1.1 已确认销售样例',NOW(3),2,NOW(3),2,0)
+ON DUPLICATE KEY UPDATE status=VALUES(status), partner_id=VALUES(partner_id), customer_id=VALUES(customer_id), warehouse_id=VALUES(warehouse_id), total_amount=VALUES(total_amount), delivery_date=VALUES(delivery_date), remark=VALUES(remark), updated_at=NOW(3), deleted=0;
+
+INSERT INTO sales_order_items (id, tenant_id, sales_order_id, line_no, product_id, unit_price, order_qty, shipped_qty, tax_rate, created_at, created_by, updated_at, updated_by, deleted)
+VALUES
+(330101,1,330001,1,300501,36.50,40.000000,0.000000,0.0000,NOW(3),2,NOW(3),2,0),
+(330102,1,330001,2,300502,24.33,30.000000,0.000000,0.0000,NOW(3),2,NOW(3),2,0),
+(330103,1,330002,1,300503,19.60,50.000000,0.000000,0.0000,NOW(3),2,NOW(3),2,0)
+ON DUPLICATE KEY UPDATE product_id=VALUES(product_id), unit_price=VALUES(unit_price), order_qty=VALUES(order_qty), shipped_qty=VALUES(shipped_qty), tax_rate=VALUES(tax_rate), updated_at=NOW(3), deleted=0;
+
 -- 商品：分类 + 规格 + 条码 + 安全库存语义 + 状态
 INSERT INTO products (id, tenant_id, product_code, product_name, category_id, unit_id, barcode, spec, batch_enabled, shelf_life_days, status, created_at, updated_at, deleted)
 VALUES
@@ -162,9 +195,9 @@ ON DUPLICATE KEY UPDATE content=VALUES(content), tokens=VALUES(tokens), latency_
 -- 审计样本：支持审计中心回放
 INSERT INTO audit_logs (id, tenant_id, module, action, resource_type, resource_id, biz_no, operator_id, operator_name, before_json, after_json, ip, user_agent, occurred_at, created_at, created_by, updated_at, updated_by, deleted)
 VALUES
-(300961,1,'WMS_INBOUND','SUBMIT','INBOUND_ORDER','300702','IN-SCN-2026042202',2,'warehouse_manager','{"status":"DRAFT"}','{"status":"SUBMITTED"}','127.0.0.1','seed-script',DATE_SUB(NOW(3), INTERVAL 20 HOUR),NOW(3),2,NOW(3),2,0),
-(300962,1,'WMS_INBOUND','POST','INBOUND_ORDER','300704','IN-SCN-2026042204',2,'warehouse_manager','{"status":"APPROVED"}','{"status":"POSTED"}','127.0.0.1','seed-script',DATE_SUB(NOW(3), INTERVAL 1 DAY),NOW(3),2,NOW(3),2,0),
-(300963,1,'WMS_OUTBOUND','SHIP','OUTBOUND_ORDER','300804','OUT-SCN-2026042204',2,'warehouse_manager','{"status":"APPROVED"}','{"status":"SHIPPED"}','127.0.0.1','seed-script',DATE_SUB(NOW(3), INTERVAL 1 DAY),NOW(3),2,NOW(3),2,0),
-(300964,1,'CS','UPDATE_TICKET_STATUS','CS_TICKET','300922','TCK-SCN-20260422-002',4,'cs_agent','{"status":"OPEN"}','{"status":"PROCESSING"}','127.0.0.1','seed-script',DATE_SUB(NOW(3), INTERVAL 3 HOUR),NOW(3),4,NOW(3),4,0),
+(300961,1,'WMS_INBOUND','SUBMIT','INBOUND_ORDER','300702','IN-SCN-2026042202',2,'warehouse01','{"status":"DRAFT"}','{"status":"SUBMITTED"}','127.0.0.1','seed-script',DATE_SUB(NOW(3), INTERVAL 20 HOUR),NOW(3),2,NOW(3),2,0),
+(300962,1,'WMS_INBOUND','POST','INBOUND_ORDER','300704','IN-SCN-2026042204',2,'warehouse01','{"status":"APPROVED"}','{"status":"POSTED"}','127.0.0.1','seed-script',DATE_SUB(NOW(3), INTERVAL 1 DAY),NOW(3),2,NOW(3),2,0),
+(300963,1,'WMS_OUTBOUND','SHIP','OUTBOUND_ORDER','300804','OUT-SCN-2026042204',2,'warehouse01','{"status":"APPROVED"}','{"status":"SHIPPED"}','127.0.0.1','seed-script',DATE_SUB(NOW(3), INTERVAL 1 DAY),NOW(3),2,NOW(3),2,0),
+(300964,1,'CS','UPDATE_TICKET_STATUS','CS_TICKET','300922','TCK-SCN-20260422-002',4,'cs01','{"status":"OPEN"}','{"status":"PROCESSING"}','127.0.0.1','seed-script',DATE_SUB(NOW(3), INTERVAL 3 HOUR),NOW(3),4,NOW(3),4,0),
 (300965,1,'AI','CHAT','AI_CONVERSATION','300941','AI-SCN-20260422-001',1,'admin',NULL,'{"scene":"warehouse","provider":"rule"}','127.0.0.1','seed-script',DATE_SUB(NOW(3), INTERVAL 4 HOUR),NOW(3),1,NOW(3),1,0)
 ON DUPLICATE KEY UPDATE module=VALUES(module), action=VALUES(action), resource_type=VALUES(resource_type), resource_id=VALUES(resource_id), biz_no=VALUES(biz_no), operator_id=VALUES(operator_id), operator_name=VALUES(operator_name), before_json=VALUES(before_json), after_json=VALUES(after_json), ip=VALUES(ip), user_agent=VALUES(user_agent), occurred_at=VALUES(occurred_at), updated_at=NOW(3), deleted=0;

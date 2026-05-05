@@ -29,9 +29,9 @@
             <p class="mt-1 text-xs text-text-secondary">请手动输入账号密码登录，验证不同角色功能。</p>
             <div class="mt-2 space-y-1 text-xs text-text-secondary">
               <p>管理员：`admin`</p>
-              <p>仓储运营：`warehouse_manager`</p>
-              <p>客服运营：`cs_agent`</p>
-              <p>观察员：`viewer`</p>
+              <p>仓储运营：`warehouse01`</p>
+              <p>客服运营：`cs01`</p>
+              <p>观察员：`observer01`</p>
             </div>
           </article>
         </article>

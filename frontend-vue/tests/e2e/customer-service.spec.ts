@@ -2,7 +2,7 @@
 import { goToPath, loginAs } from "./helpers";
 
 test("客服建单并回查", async ({ page }) => {
-  await loginAs(page, "cs_agent");
+  await loginAs(page, "cs01");
   await goToPath(page, "/cs/workspace");
 
   await expect(page.getByRole("heading", { name: "客服工单闭环工作台" })).toBeVisible();

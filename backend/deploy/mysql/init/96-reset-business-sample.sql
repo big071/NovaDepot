@@ -1,6 +1,21 @@
 ﻿SET NAMES utf8mb4;
 
--- 清理 Phase 1 业务样本层 + 轻压测层（ID 300000-399999）
+-- 清理 Phase 1 业务样本层 + 轻压测层（ID 300000-399999）和自动化测试生成的雪花 ID 数据
+DELETE FROM ai_messages WHERE id >= 1000000000000000000;
+DELETE FROM ai_conversations WHERE id >= 1000000000000000000;
+DELETE FROM customer_service_messages WHERE id >= 1000000000000000000;
+DELETE FROM customer_service_tickets WHERE id >= 1000000000000000000;
+DELETE FROM customer_service_sessions WHERE id >= 1000000000000000000;
+DELETE FROM faq_knowledge WHERE id >= 1000000000000000000;
+DELETE FROM rule_configs WHERE id >= 1000000000000000000;
+DELETE FROM audit_logs WHERE id >= 1000000000000000000;
+DELETE FROM inventory_transactions WHERE id >= 1000000000000000000;
+DELETE FROM outbound_order_items WHERE id >= 1000000000000000000;
+DELETE FROM outbound_orders WHERE id >= 1000000000000000000;
+DELETE FROM inbound_order_items WHERE id >= 1000000000000000000;
+DELETE FROM inbound_orders WHERE id >= 1000000000000000000;
+DELETE FROM inventory WHERE id >= 1000000000000000000;
+
 DELETE FROM ai_messages WHERE id BETWEEN 300000 AND 399999;
 DELETE FROM ai_conversations WHERE id BETWEEN 300000 AND 399999;
 
@@ -49,3 +64,21 @@ DELETE FROM warehouse_locations WHERE id BETWEEN 300000 AND 399999;
 DELETE FROM warehouses WHERE id BETWEEN 300000 AND 399999;
 DELETE FROM suppliers WHERE id BETWEEN 300000 AND 399999;
 DELETE FROM customers WHERE id BETWEEN 300000 AND 399999;
+DELETE FROM purchase_order_items WHERE id BETWEEN 300000 AND 399999;
+DELETE FROM purchase_orders WHERE id BETWEEN 300000 AND 399999;
+DELETE FROM sales_order_items WHERE id BETWEEN 300000 AND 399999;
+DELETE FROM sales_orders WHERE id BETWEEN 300000 AND 399999;
+
+SET @stmt = (
+  SELECT IF(
+    COUNT(*) = 1,
+    'DELETE FROM partners WHERE id BETWEEN 300000 AND 399999',
+    'SELECT 1'
+  )
+  FROM information_schema.tables
+  WHERE table_schema = DATABASE()
+    AND table_name = 'partners'
+);
+PREPARE reset_partners FROM @stmt;
+EXECUTE reset_partners;
+DEALLOCATE PREPARE reset_partners;

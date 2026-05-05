@@ -24,7 +24,7 @@
 - `docs/30-rbac-login-and-cs-session-message-persistence-2026-04-11.md`
 
 ## 5. 验收标准
-1. 使用 `admin / 123456 / default` 登录后，可执行入库审核/过账与出库审核/发运接口。
+1. 使用 `admin / admin123 / default` 登录后，可执行入库审核/过账与出库审核/发运接口。
 2. 客服会话列表与消息来自 MySQL，发送消息后可回查。
 3. 登录对错误账号或密码返回明确失败，不再“任意用户名都成功”。
 4. Docker 构建通过，数据库升级脚本可重复执行。
@@ -48,7 +48,7 @@
    - 与工单 `customer_service_tickets` 统一 MySQL 数据源。
 
 ## 8. 验证结果
-1. `admin / 123456 / default` 登录成功，JWT 包含审核/过账权限。
+1. `admin / admin123 / default` 登录成功，JWT 包含审核/过账权限。
 2. 随机账号（如 `guest`）登录失败，返回明确错误信息。
 3. 客服会话消息发送后重新查询可见，数据源标记为 `MYSQL`。
 4. `docker compose up --build -d backend` 构建通过。

@@ -40,6 +40,9 @@ const roleMenuMap: Record<string, Array<{ label: string; path: string; permissio
     { label: "库存管理", path: "/wms/inventory", permission: "INVENTORY_READ" },
     { label: "入库管理", path: "/wms/inbound", permission: "INBOUND_READ" },
     { label: "出库管理", path: "/wms/outbound", permission: "OUTBOUND_READ" },
+    { label: "往来单位", path: "/erp/partners", permission: "PARTNER_READ" },
+    { label: "采购管理", path: "/erp/purchases", permission: "PURCHASE_READ" },
+    { label: "销售管理", path: "/erp/sales", permission: "SALES_READ" },
     { label: "AI 助手", path: "/ai/enterprise", permission: "AI_CHAT" },
     { label: "Agent 中心", path: "/agent/center", permission: "AGENT_TASK_READ" },
     { label: "知识维护", path: "/cs/knowledge", permission: "KNOWLEDGE_READ" },
@@ -51,6 +54,9 @@ const roleMenuMap: Record<string, Array<{ label: string; path: string; permissio
     { label: "库存管理", path: "/wms/inventory", permission: "INVENTORY_READ" },
     { label: "入库管理", path: "/wms/inbound", permission: "INBOUND_READ" },
     { label: "出库管理", path: "/wms/outbound", permission: "OUTBOUND_READ" },
+    { label: "往来单位", path: "/erp/partners", permission: "PARTNER_READ" },
+    { label: "采购管理", path: "/erp/purchases", permission: "PURCHASE_READ" },
+    { label: "销售单只读", path: "/erp/sales", permission: "SALES_READ" },
     { label: "商品管理", path: "/wms/products", permission: "PRODUCT_READ" },
     { label: "仓库管理", path: "/wms/warehouses", permission: "WAREHOUSE_READ" },
     { label: "库位管理", path: "/wms/locations", permission: "LOCATION_READ" },
@@ -59,6 +65,9 @@ const roleMenuMap: Record<string, Array<{ label: string; path: string; permissio
   ],
   cs_ops: [
     { label: "客服工作台", path: "/cs/workspace", permission: "CS_SESSION_READ" },
+    { label: "销售管理", path: "/erp/sales", permission: "SALES_READ" },
+    { label: "采购单只读", path: "/erp/purchases", permission: "PURCHASE_READ" },
+    { label: "往来单位", path: "/erp/partners", permission: "PARTNER_READ" },
     { label: "知识草稿", path: "/cs/knowledge", permission: "KNOWLEDGE_READ" },
     { label: "AI 助手", path: "/ai/enterprise", permission: "AI_CHAT" },
     { label: "Agent 中心", path: "/agent/center", permission: "AGENT_TASK_READ" },
@@ -67,6 +76,9 @@ const roleMenuMap: Record<string, Array<{ label: string; path: string; permissio
   observer: [
     { label: "只读总览", path: "/dashboard", permission: "REPORT_DASHBOARD_READ" },
     { label: "库存建议", path: "/wms/inventory", permission: "INVENTORY_READ" },
+    { label: "往来单位", path: "/erp/partners", permission: "PARTNER_READ" },
+    { label: "采购单", path: "/erp/purchases", permission: "PURCHASE_READ" },
+    { label: "销售单", path: "/erp/sales", permission: "SALES_READ" },
     { label: "知识只读", path: "/cs/knowledge", permission: "KNOWLEDGE_READ" },
     { label: "Agent 历史", path: "/agent/center", permission: "AGENT_TASK_READ" }
   ]

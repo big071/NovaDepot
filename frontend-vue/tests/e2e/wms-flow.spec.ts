@@ -3,7 +3,7 @@ import { goToPath, loginAsAdmin } from "./helpers";
 
 const API_BASE = process.env.E2E_API_BASE_URL || "http://127.0.0.1:18080/api/v1";
 
-async function apiLogin(request: import("@playwright/test").APIRequestContext, username: string, password = "123456") {
+async function apiLogin(request: import("@playwright/test").APIRequestContext, username: string, password = "pass123") {
   const resp = await request.post(`${API_BASE}/auth/login`, {
     data: { tenantCode: "default", username, password }
   });
@@ -15,7 +15,7 @@ async function apiLogin(request: import("@playwright/test").APIRequestContext, u
 }
 
 test("入库流转：审核并过账", async ({ page, request }) => {
-  const warehouseToken = await apiLogin(request, "warehouse_manager");
+  const warehouseToken = await apiLogin(request, "warehouse01");
 
   const createResp = await request.post(`${API_BASE}/inbound-orders`, {
     headers: { Authorization: `Bearer ${warehouseToken}` },
@@ -52,7 +52,7 @@ test("入库流转：审核并过账", async ({ page, request }) => {
 });
 
 test("出库流转：审核并发运", async ({ page, request }) => {
-  const warehouseToken = await apiLogin(request, "warehouse_manager");
+  const warehouseToken = await apiLogin(request, "warehouse01");
 
   const createResp = await request.post(`${API_BASE}/outbound-orders`, {
     headers: { Authorization: `Bearer ${warehouseToken}` },

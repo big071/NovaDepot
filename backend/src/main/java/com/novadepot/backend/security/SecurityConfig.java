@@ -40,6 +40,7 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(
                                 "/api/v1/auth/login",
                                 "/v3/api-docs/**",
@@ -64,6 +65,8 @@ public class SecurityConfig {
                 "http://127.0.0.1:3000",
                 "http://localhost:3100",
                 "http://127.0.0.1:3100",
+                "http://localhost:3101",
+                "http://127.0.0.1:3101",
                 "http://localhost:5173",
                 "http://127.0.0.1:5173"
         ));

@@ -19,6 +19,7 @@
 | 73 | [v1.0 最终交付说明](73-v1-delivery-notes.md) | 交付物清单、验收确认 |
 | 74 | [v1.0 最终验收清单](74-v1-acceptance-checklist.md) | 逐项验收签字表 |
 | 75 | [v1.0 演示说明](75-v1-demo-walkthrough.md) | 5 分钟 / 15 分钟演示指导 |
+| 76 | [v1.1 Sprint Plan](76-v1.1-sprint-plan.md) | v1.1 四个 Sprint 拆分与 Sprint 1 实施计划 |
 
 ---
 

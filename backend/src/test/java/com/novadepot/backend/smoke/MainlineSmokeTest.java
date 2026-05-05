@@ -34,6 +34,7 @@ class MainlineSmokeTest {
     private ObjectMapper objectMapper;
 
     private static String adminToken;
+    private static String operatorToken;
     private static Long createdInboundId;
     private static Long createdOutboundId;
     private static String latestAiConversationNo;
@@ -48,8 +49,10 @@ class MainlineSmokeTest {
     @Test
     @Order(1)
     void login_shouldReturnToken() throws Exception {
-        adminToken = login("admin", "123456");
+        adminToken = login("admin", "admin123");
+        operatorToken = login("warehouse01", "pass123");
         assertThat(adminToken).isNotBlank();
+        assertThat(operatorToken).isNotBlank();
     }
 
     @Test
@@ -84,7 +87,7 @@ class MainlineSmokeTest {
 
         MvcResult createResult = mockMvc.perform(
                         post("/api/v1/inbound-orders")
-                                .header("Authorization", bearer())
+                                .header("Authorization", bearer(operatorToken))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload)
                 )
@@ -95,6 +98,10 @@ class MainlineSmokeTest {
 
         createdInboundId = parseDataNode(createResult).path("id").asLong();
         assertThat(createdInboundId).isPositive();
+
+        authedPost("/api/v1/inbound-orders/" + createdInboundId + "/actions/submit", "{}", operatorToken)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"));
 
         authedPost("/api/v1/inbound-orders/" + createdInboundId + "/actions/approve", "{}")
                 .andExpect(status().isOk())
@@ -120,7 +127,7 @@ class MainlineSmokeTest {
 
         MvcResult createResult = mockMvc.perform(
                         post("/api/v1/outbound-orders")
-                                .header("Authorization", bearer())
+                                .header("Authorization", bearer(operatorToken))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(payload)
                 )
@@ -131,6 +138,10 @@ class MainlineSmokeTest {
 
         createdOutboundId = parseDataNode(createResult).path("id").asLong();
         assertThat(createdOutboundId).isPositive();
+
+        authedPost("/api/v1/outbound-orders/" + createdOutboundId + "/actions/submit", "{}", operatorToken)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"));
 
         authedPost("/api/v1/outbound-orders/" + createdOutboundId + "/actions/approve", "{}")
                 .andExpect(status().isOk())
@@ -240,7 +251,7 @@ class MainlineSmokeTest {
     @Test
     @Order(8)
     void permission_forViewer_shouldReturn403OnOutboundShip() throws Exception {
-        String viewerToken = login("viewer", "123456");
+        String viewerToken = login("observer01", "pass123");
         mockMvc.perform(
                         post("/api/v1/outbound-orders/16003/actions/ship")
                                 .header("Authorization", "Bearer " + viewerToken)
@@ -278,9 +289,13 @@ class MainlineSmokeTest {
     }
 
     private org.springframework.test.web.servlet.ResultActions authedPost(String url, String body) throws Exception {
+        return authedPost(url, body, adminToken);
+    }
+
+    private org.springframework.test.web.servlet.ResultActions authedPost(String url, String body, String token) throws Exception {
         return mockMvc.perform(
                 post(url)
-                        .header("Authorization", bearer())
+                        .header("Authorization", bearer(token))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body)
         );
@@ -288,6 +303,10 @@ class MainlineSmokeTest {
 
     private String bearer() {
         return "Bearer " + adminToken;
+    }
+
+    private String bearer(String token) {
+        return "Bearer " + token;
     }
 
     private JsonNode parseDataNode(MvcResult result) throws Exception {
