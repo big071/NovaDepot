@@ -52,6 +52,77 @@ PREPARE reset_rule_configs FROM @stmt;
 EXECUTE reset_rule_configs;
 DEALLOCATE PREPARE reset_rule_configs;
 DELETE FROM audit_logs WHERE id BETWEEN 300000 AND 399999;
+DELETE FROM inventory_transactions WHERE tenant_id = 1 AND biz_type = 'STOCKTAKE_ADJUST';
+
+SET @stmt = (
+  SELECT IF(
+    COUNT(*) = 1,
+    'DELETE FROM payments WHERE tenant_id = 1 AND (id BETWEEN 300000 AND 399999 OR id >= 1000000000000000000)',
+    'SELECT 1'
+  )
+  FROM information_schema.tables
+  WHERE table_schema = DATABASE()
+    AND table_name = 'payments'
+);
+PREPARE reset_payments FROM @stmt;
+EXECUTE reset_payments;
+DEALLOCATE PREPARE reset_payments;
+
+SET @stmt = (
+  SELECT IF(
+    COUNT(*) = 1,
+    'DELETE FROM payables WHERE tenant_id = 1 AND (id BETWEEN 300000 AND 399999 OR id >= 1000000000000000000)',
+    'SELECT 1'
+  )
+  FROM information_schema.tables
+  WHERE table_schema = DATABASE()
+    AND table_name = 'payables'
+);
+PREPARE reset_payables FROM @stmt;
+EXECUTE reset_payables;
+DEALLOCATE PREPARE reset_payables;
+
+SET @stmt = (
+  SELECT IF(
+    COUNT(*) = 1,
+    'DELETE FROM receivables WHERE tenant_id = 1 AND (id BETWEEN 300000 AND 399999 OR id >= 1000000000000000000)',
+    'SELECT 1'
+  )
+  FROM information_schema.tables
+  WHERE table_schema = DATABASE()
+    AND table_name = 'receivables'
+);
+PREPARE reset_receivables FROM @stmt;
+EXECUTE reset_receivables;
+DEALLOCATE PREPARE reset_receivables;
+
+SET @stmt = (
+  SELECT IF(
+    COUNT(*) = 1,
+    'DELETE FROM stocktake_order_items WHERE tenant_id = 1 AND (id BETWEEN 300000 AND 399999 OR id >= 1000000000000000000)',
+    'SELECT 1'
+  )
+  FROM information_schema.tables
+  WHERE table_schema = DATABASE()
+    AND table_name = 'stocktake_order_items'
+);
+PREPARE reset_stocktake_items FROM @stmt;
+EXECUTE reset_stocktake_items;
+DEALLOCATE PREPARE reset_stocktake_items;
+
+SET @stmt = (
+  SELECT IF(
+    COUNT(*) = 1,
+    'DELETE FROM stocktake_orders WHERE tenant_id = 1 AND (id BETWEEN 300000 AND 399999 OR id >= 1000000000000000000)',
+    'SELECT 1'
+  )
+  FROM information_schema.tables
+  WHERE table_schema = DATABASE()
+    AND table_name = 'stocktake_orders'
+);
+PREPARE reset_stocktake_orders FROM @stmt;
+EXECUTE reset_stocktake_orders;
+DEALLOCATE PREPARE reset_stocktake_orders;
 
 DELETE FROM outbound_order_items WHERE id BETWEEN 300000 AND 399999;
 DELETE FROM outbound_orders WHERE id BETWEEN 300000 AND 399999;

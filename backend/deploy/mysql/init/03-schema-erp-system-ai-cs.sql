@@ -634,3 +634,73 @@ CREATE TABLE IF NOT EXISTS agent_task_runs (
   KEY idx_agent_task_runs_tenant_task_time (tenant_id, task_code, started_at),
   KEY idx_agent_task_runs_tenant_status_time (tenant_id, status, started_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS payables (
+  id BIGINT PRIMARY KEY,
+  tenant_id BIGINT NOT NULL,
+  payable_no VARCHAR(64) NOT NULL,
+  source_type VARCHAR(32) NOT NULL,
+  source_order_id BIGINT NOT NULL,
+  source_order_no VARCHAR(64) NOT NULL,
+  partner_id BIGINT NOT NULL,
+  warehouse_id BIGINT NOT NULL,
+  total_amount DECIMAL(18,2) NOT NULL DEFAULT 0,
+  paid_amount DECIMAL(18,2) NOT NULL DEFAULT 0,
+  balance_amount DECIMAL(18,2) NOT NULL DEFAULT 0,
+  status VARCHAR(32) NOT NULL,
+  remark VARCHAR(500) NULL,
+  created_at DATETIME(3) NOT NULL,
+  created_by BIGINT NULL,
+  updated_at DATETIME(3) NOT NULL,
+  updated_by BIGINT NULL,
+  deleted TINYINT(1) NOT NULL DEFAULT 0,
+  UNIQUE KEY uk_tenant_payable_no (tenant_id, payable_no),
+  UNIQUE KEY uk_tenant_payable_source (tenant_id, source_type, source_order_id),
+  KEY idx_payable_status (tenant_id, status, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS receivables (
+  id BIGINT PRIMARY KEY,
+  tenant_id BIGINT NOT NULL,
+  receivable_no VARCHAR(64) NOT NULL,
+  source_type VARCHAR(32) NOT NULL,
+  source_order_id BIGINT NOT NULL,
+  source_order_no VARCHAR(64) NOT NULL,
+  partner_id BIGINT NOT NULL,
+  warehouse_id BIGINT NOT NULL,
+  total_amount DECIMAL(18,2) NOT NULL DEFAULT 0,
+  received_amount DECIMAL(18,2) NOT NULL DEFAULT 0,
+  balance_amount DECIMAL(18,2) NOT NULL DEFAULT 0,
+  status VARCHAR(32) NOT NULL,
+  remark VARCHAR(500) NULL,
+  created_at DATETIME(3) NOT NULL,
+  created_by BIGINT NULL,
+  updated_at DATETIME(3) NOT NULL,
+  updated_by BIGINT NULL,
+  deleted TINYINT(1) NOT NULL DEFAULT 0,
+  UNIQUE KEY uk_tenant_receivable_no (tenant_id, receivable_no),
+  UNIQUE KEY uk_tenant_receivable_source (tenant_id, source_type, source_order_id),
+  KEY idx_receivable_status (tenant_id, status, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS payments (
+  id BIGINT PRIMARY KEY,
+  tenant_id BIGINT NOT NULL,
+  payment_no VARCHAR(64) NOT NULL,
+  direction VARCHAR(32) NOT NULL,
+  ledger_id BIGINT NOT NULL,
+  ledger_no VARCHAR(64) NOT NULL,
+  partner_id BIGINT NOT NULL,
+  amount DECIMAL(18,2) NOT NULL,
+  paid_at DATE NOT NULL,
+  method VARCHAR(32) NOT NULL DEFAULT 'MANUAL',
+  remark VARCHAR(500) NULL,
+  created_at DATETIME(3) NOT NULL,
+  created_by BIGINT NULL,
+  updated_at DATETIME(3) NOT NULL,
+  updated_by BIGINT NULL,
+  deleted TINYINT(1) NOT NULL DEFAULT 0,
+  UNIQUE KEY uk_tenant_payment_no (tenant_id, payment_no),
+  KEY idx_payment_ledger (tenant_id, direction, ledger_id),
+  KEY idx_payment_paid_at (tenant_id, paid_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

@@ -4,6 +4,7 @@ import { useAuthStore } from "@/stores/auth";
 interface RouteMetaPermission {
   public?: boolean;
   requiredPermission?: string;
+  requiredAnyPermissions?: string[];
   requiredRoles?: Array<"admin" | "warehouse_ops" | "cs_ops" | "observer">;
 }
 
@@ -22,11 +23,13 @@ const router = createRouter({
         { path: "wms/warehouses", component: () => import("@/pages/wms/WarehousesPage.vue"), meta: { requiredPermission: "WAREHOUSE_READ" } },
         { path: "wms/locations", component: () => import("@/pages/wms/LocationsPage.vue"), meta: { requiredPermission: "LOCATION_READ" } },
         { path: "wms/inventory", component: () => import("@/pages/wms/InventoryPage.vue"), meta: { requiredPermission: "INVENTORY_READ" } },
+        { path: "wms/stock-take", component: () => import("@/pages/wms/StocktakePage.vue"), meta: { requiredPermission: "STOCKTAKE_READ" } },
         { path: "wms/inbound", component: () => import("@/pages/wms/InboundPage.vue"), meta: { requiredPermission: "INBOUND_READ" } },
         { path: "wms/outbound", component: () => import("@/pages/wms/OutboundPage.vue"), meta: { requiredPermission: "OUTBOUND_READ" } },
         { path: "erp/partners", component: () => import("@/pages/erp/PartnerPage.vue"), meta: { requiredPermission: "PARTNER_READ" } },
         { path: "erp/purchases", component: () => import("@/pages/erp/PurchasePage.vue"), meta: { requiredPermission: "PURCHASE_READ" } },
         { path: "erp/sales", component: () => import("@/pages/erp/SalesPage.vue"), meta: { requiredPermission: "SALES_READ" } },
+        { path: "erp/finance", component: () => import("@/pages/erp/FinancePage.vue"), meta: { requiredAnyPermissions: ["FINANCE_PAYABLE_READ", "FINANCE_RECEIVABLE_READ"] } },
         { path: "ai/enterprise", component: () => import("@/pages/ai/AiAssistantPage.vue"), meta: { requiredPermission: "AI_CHAT" } },
         { path: "agent/center", component: () => import("@/pages/agent/AgentCenterPage.vue"), meta: { requiredPermission: "AGENT_TASK_READ" } },
         { path: "cs/workspace", component: () => import("@/pages/cs/CustomerServicePage.vue"), meta: { requiredPermission: "CS_SESSION_READ" } },
@@ -63,6 +66,15 @@ router.beforeEach(async (to) => {
       }
     };
   }
+  if (meta.requiredAnyPermissions && meta.requiredAnyPermissions.length > 0 && !meta.requiredAnyPermissions.some((permission) => authStore.hasPermission(permission))) {
+    return {
+      path: "/access-denied",
+      query: {
+        from: to.path,
+        permission: meta.requiredAnyPermissions.join(",")
+      }
+    };
+  }
   if (meta.requiredRoles && meta.requiredRoles.length > 0 && !meta.requiredRoles.includes(authStore.roleKey)) {
     return {
       path: "/access-denied",
@@ -79,6 +91,7 @@ function resolvePreferredPath(authStore: ReturnType<typeof useAuthStore>) {
   if (authStore.hasPermission("REPORT_DASHBOARD_READ")) return "/dashboard";
   if (authStore.hasPermission("INBOUND_READ")) return "/wms/inbound";
   if (authStore.hasPermission("OUTBOUND_READ")) return "/wms/outbound";
+  if (authStore.hasPermission("STOCKTAKE_READ")) return "/wms/stock-take";
   if (authStore.hasPermission("PURCHASE_READ")) return "/erp/purchases";
   if (authStore.hasPermission("CS_SESSION_READ")) return "/cs/workspace";
   if (authStore.hasPermission("AI_CHAT")) return "/ai/enterprise";

@@ -29,6 +29,7 @@ try {
   Run-SqlFile "backend/deploy/mysql/init/102-data-repair-zh-semantic.sql"
   Run-SqlFile "backend/deploy/mysql/init/104-seed-knowledge-sprint3.sql"
   Run-SqlFile "backend/deploy/mysql/init/105-seed-v1.1-sprint2-wms-link.sql"
+  Run-SqlFile "backend/deploy/mysql/init/106-seed-v1.1-sprint3-finance-stocktake.sql"
   Write-Host "[reset-commercial] done. Next: ./scripts/ops/release-checklist.ps1"
 } catch {
   Write-Error "[reset-commercial] failed: $($_.Exception.Message)"

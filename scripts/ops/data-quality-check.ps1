@@ -187,6 +187,107 @@ select
   if ($sprint2Inconsistent -gt 0) { throw "sprint2 ERP/WMS inconsistent rows found: $sprint2Inconsistent" }
   Write-Host "sprint2 ERP/WMS link consistency passed"
 
+  Write-Host "[data-quality] sprint3 finance and stocktake consistency"
+  $sprint3Inconsistent = [int](Query-Scalar @"
+select
+  (select count(*)
+     from payables p
+     left join purchase_orders po
+       on po.id = p.source_order_id
+      and po.tenant_id = p.tenant_id
+      and po.deleted = 0
+    where p.tenant_id = 1
+      and p.deleted = 0
+      and (p.source_type <> 'PURCHASE_ORDER' or po.id is null)) +
+  (select count(*)
+     from receivables r
+     left join sales_orders so
+       on so.id = r.source_order_id
+      and so.tenant_id = r.tenant_id
+      and so.deleted = 0
+    where r.tenant_id = 1
+      and r.deleted = 0
+      and (r.source_type <> 'SALES_ORDER' or so.id is null)) +
+  (select count(*)
+     from payables
+    where tenant_id = 1
+      and deleted = 0
+      and (total_amount < 0 or paid_amount < 0 or balance_amount < 0 or paid_amount > total_amount
+        or status not in ('UNPAID','PARTIALLY_PAID','PAID','CANCELLED')
+        or (status <> 'CANCELLED' and balance_amount <> total_amount - paid_amount)
+        or (status <> 'CANCELLED' and paid_amount = 0 and balance_amount > 0 and status <> 'UNPAID')
+        or (status <> 'CANCELLED' and paid_amount > 0 and paid_amount < total_amount and status <> 'PARTIALLY_PAID')
+        or (status <> 'CANCELLED' and paid_amount = total_amount and status <> 'PAID'))) +
+  (select count(*)
+     from receivables
+    where tenant_id = 1
+      and deleted = 0
+      and (total_amount < 0 or received_amount < 0 or balance_amount < 0 or received_amount > total_amount
+        or status not in ('UNPAID','PARTIALLY_PAID','PAID','CANCELLED')
+        or (status <> 'CANCELLED' and balance_amount <> total_amount - received_amount)
+        or (status <> 'CANCELLED' and received_amount = 0 and balance_amount > 0 and status <> 'UNPAID')
+        or (status <> 'CANCELLED' and received_amount > 0 and received_amount < total_amount and status <> 'PARTIALLY_PAID')
+        or (status <> 'CANCELLED' and received_amount = total_amount and status <> 'PAID'))) +
+  (select count(*)
+     from payments pm
+    where pm.tenant_id = 1
+      and pm.deleted = 0
+      and (pm.amount <= 0
+        or pm.direction not in ('PAYABLE','RECEIVABLE')
+        or (pm.direction = 'PAYABLE' and not exists (
+          select 1 from payables p where p.tenant_id = pm.tenant_id and p.id = pm.ledger_id and p.deleted = 0
+        ))
+        or (pm.direction = 'RECEIVABLE' and not exists (
+          select 1 from receivables r where r.tenant_id = pm.tenant_id and r.id = pm.ledger_id and r.deleted = 0
+        )))) +
+  (select count(*)
+     from stocktake_order_items si
+     left join stocktake_orders so
+       on so.id = si.stocktake_order_id
+      and so.tenant_id = si.tenant_id
+      and so.deleted = 0
+    where si.tenant_id = 1
+      and si.deleted = 0
+      and so.id is null) +
+  (select count(*)
+     from stocktake_orders so
+    where so.tenant_id = 1
+      and so.deleted = 0
+      and so.status = 'COMPLETED'
+      and exists (
+        select 1
+          from stocktake_order_items si
+         where si.tenant_id = so.tenant_id
+           and si.stocktake_order_id = so.id
+           and si.deleted = 0
+           and si.diff_qty <> 0
+           and not exists (
+             select 1
+               from inventory_transactions it
+              where it.tenant_id = si.tenant_id
+                and it.biz_type = 'STOCKTAKE_ADJUST'
+                and it.biz_no = so.stocktake_no
+                and it.product_id = si.product_id
+                and it.location_id = si.location_id
+                and it.change_qty = si.diff_qty
+                and it.deleted = 0
+           )
+      )) +
+  (select count(*)
+     from inventory_transactions
+    where tenant_id = 1
+      and deleted = 0
+      and biz_type = 'STOCKTAKE_ADJUST'
+      and before_qty + change_qty <> after_qty) +
+  (select count(*)
+     from inventory
+    where tenant_id = 1
+      and deleted = 0
+      and available_qty < 0);
+"@)
+  if ($sprint3Inconsistent -gt 0) { throw "sprint3 finance/stocktake inconsistent rows found: $sprint3Inconsistent" }
+  Write-Host "sprint3 finance and stocktake consistency passed"
+
   Write-Host "[data-quality] passed"
 } catch {
   Write-Error "[data-quality] failed: $($_.Exception.Message)"

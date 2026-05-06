@@ -95,6 +95,35 @@ export interface InventoryTransaction {
   occurredAt?: string;
 }
 
+export interface StocktakeOrder {
+  id: string;
+  stocktakeNo: string;
+  status: string;
+  warehouseId: string;
+  scopeType?: string;
+  startedAt?: string;
+  finishedAt?: string;
+  diffCount?: number;
+  remark?: string;
+}
+
+export interface StocktakeItem {
+  id: string;
+  stocktakeOrderId: string;
+  lineNo: number;
+  productId: string;
+  locationId: string;
+  systemQty: number;
+  countedQty: number;
+  diffQty: number;
+  resultType: string;
+}
+
+export interface StocktakeDetail {
+  order: StocktakeOrder;
+  items: StocktakeItem[];
+}
+
 export interface InboundOrder {
   id: string;
   inboundNo: string;
@@ -262,6 +291,18 @@ export const wmsApi = {
     ),
   importInventory: (csvContent: string) => api.post<Record<string, unknown>>("/inventory/import", csvContent),
   inventoryExportFields: () => api.get<string[]>("/inventory/export/fields"),
+
+  listStocktakes: (query?: { status?: string }) => api.get<StocktakeOrder[]>("/stocktakes", query),
+  getStocktake: (id: string) => api.get<StocktakeDetail>(`/stocktakes/${id}`),
+  createStocktake: (payload: { warehouseId: string; remark?: string }) =>
+    api.post<{ id: string; stocktakeNo: string; status: string }>("/stocktakes", payload),
+  startStocktake: (id: string) => api.post<{ id: string; stocktakeNo: string; status: string }>(`/stocktakes/${id}/actions/start`),
+  updateStocktakeCount: (id: string, itemId: string, countedQty: number) =>
+    api.put<{ id: string; diffQty: number; resultType: string }>(`/stocktakes/${id}/items/${itemId}/count`, { countedQty }),
+  submitStocktakeReview: (id: string) =>
+    api.post<{ id: string; stocktakeNo: string; status: string }>(`/stocktakes/${id}/actions/submit-review`),
+  confirmStocktake: (id: string) =>
+    api.post<{ id: string; status: string; adjustedCount: number }>(`/stocktakes/${id}/actions/confirm`),
 
   listInboundOrders: (options?: QueryOptions) =>
     withCache(getCacheKey("inbound-orders"), () => api.get<InboundOrder[]>("/inbound-orders"), options, 20_000),

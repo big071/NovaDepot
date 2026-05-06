@@ -12,6 +12,7 @@ import com.novadepot.backend.model.entity.PartnerEntity;
 import com.novadepot.backend.model.entity.SalesOrderEntity;
 import com.novadepot.backend.model.entity.SalesOrderItemEntity;
 import com.novadepot.backend.modules.auditlogs.AuditLogRecordService;
+import com.novadepot.backend.modules.finance.FinanceService;
 import com.novadepot.backend.repository.InventoryMapper;
 import com.novadepot.backend.repository.OutboundOrderItemMapper;
 import com.novadepot.backend.repository.OutboundOrderMapper;
@@ -39,6 +40,7 @@ public class SalesOrdersService {
     private final InventoryMapper inventoryMapper;
     private final PartnerMapper partnerMapper;
     private final AuditLogRecordService auditLogRecordService;
+    private final FinanceService financeService;
 
     public SalesOrdersService(SalesOrderMapper salesOrderMapper,
                               SalesOrderItemMapper salesOrderItemMapper,
@@ -46,7 +48,8 @@ public class SalesOrdersService {
                               OutboundOrderItemMapper outboundOrderItemMapper,
                               InventoryMapper inventoryMapper,
                               PartnerMapper partnerMapper,
-                              AuditLogRecordService auditLogRecordService) {
+                              AuditLogRecordService auditLogRecordService,
+                              FinanceService financeService) {
         this.salesOrderMapper = salesOrderMapper;
         this.salesOrderItemMapper = salesOrderItemMapper;
         this.outboundOrderMapper = outboundOrderMapper;
@@ -54,6 +57,7 @@ public class SalesOrdersService {
         this.inventoryMapper = inventoryMapper;
         this.partnerMapper = partnerMapper;
         this.auditLogRecordService = auditLogRecordService;
+        this.financeService = financeService;
     }
 
     public List<SalesOrderEntity> list(String status, Long partnerId) {
@@ -123,6 +127,7 @@ public class SalesOrdersService {
         order.setUpdatedBy(RequestContext.userId());
         salesOrderMapper.updateById(order);
         recordAudit(order, "CONFIRM", "DRAFT", "CONFIRMED");
+        financeService.ensureReceivableForSales(order);
         return result(order);
     }
 
@@ -138,6 +143,7 @@ public class SalesOrdersService {
         order.setUpdatedBy(RequestContext.userId());
         salesOrderMapper.updateById(order);
         recordAudit(order, "CANCEL", before, "CANCELLED");
+        financeService.cancelReceivableForSales(order);
         return result(order);
     }
 
