@@ -15,6 +15,8 @@ import java.time.LocalDateTime;
 public class OutboundOrderItemEntity extends BaseEntity {
     private Long outboundOrderId;
     private Integer lineNo;
+    private Long sourceOrderItemId;
+    private Integer sourceLineNo;
     private Long productId;
     private Long locationId;
     private Long unitId;

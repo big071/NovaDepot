@@ -15,6 +15,7 @@ async function apiLogin(request: import("@playwright/test").APIRequestContext, u
 }
 
 test("入库流转：审核并过账", async ({ page, request }) => {
+  page.on("dialog", (dialog) => dialog.accept(""));
   const warehouseToken = await apiLogin(request, "warehouse01");
 
   const createResp = await request.post(`${API_BASE}/inbound-orders`, {
@@ -44,7 +45,7 @@ test("入库流转：审核并过账", async ({ page, request }) => {
   const row = page.locator("tr", { hasText: String(inboundNo) }).first();
   await expect(row).toBeVisible();
 
-  await row.getByRole("button", { name: "审核通过", exact: true }).click();
+  await row.getByRole("button", { name: "审核", exact: true }).click();
   await expect(page.locator("tr", { hasText: String(inboundNo) }).first()).toContainText(/APPROVED|已审核/);
 
   await row.getByRole("button", { name: "过账", exact: true }).click();
@@ -52,6 +53,7 @@ test("入库流转：审核并过账", async ({ page, request }) => {
 });
 
 test("出库流转：审核并发运", async ({ page, request }) => {
+  page.on("dialog", (dialog) => dialog.accept(""));
   const warehouseToken = await apiLogin(request, "warehouse01");
 
   const createResp = await request.post(`${API_BASE}/outbound-orders`, {
@@ -81,7 +83,7 @@ test("出库流转：审核并发运", async ({ page, request }) => {
   const row = page.locator("tr", { hasText: String(outboundNo) }).first();
   await expect(row).toBeVisible();
 
-  await row.getByRole("button", { name: "审核通过", exact: true }).click();
+  await row.getByRole("button", { name: "审核", exact: true }).click();
   await expect(page.locator("tr", { hasText: String(outboundNo) }).first()).toContainText(/APPROVED|已审核/);
 
   await row.getByRole("button", { name: "发运", exact: true }).click();

@@ -12,6 +12,8 @@ import com.novadepot.backend.model.entity.InventoryEntity;
 import com.novadepot.backend.model.entity.InventoryTransactionEntity;
 import com.novadepot.backend.model.entity.OutboundOrderEntity;
 import com.novadepot.backend.model.entity.OutboundOrderItemEntity;
+import com.novadepot.backend.model.entity.SalesOrderEntity;
+import com.novadepot.backend.model.entity.SalesOrderItemEntity;
 import com.novadepot.backend.modules.auditlogs.AuditLogRecordService;
 import com.novadepot.backend.repository.AuditLogMapper;
 import com.novadepot.backend.repository.AuthQueryMapper;
@@ -19,6 +21,8 @@ import com.novadepot.backend.repository.InventoryMapper;
 import com.novadepot.backend.repository.InventoryTransactionMapper;
 import com.novadepot.backend.repository.OutboundOrderItemMapper;
 import com.novadepot.backend.repository.OutboundOrderMapper;
+import com.novadepot.backend.repository.SalesOrderItemMapper;
+import com.novadepot.backend.repository.SalesOrderMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -40,6 +44,8 @@ public class OutboundOrdersService {
     private final OutboundOrderItemMapper outboundOrderItemMapper;
     private final InventoryMapper inventoryMapper;
     private final InventoryTransactionMapper inventoryTransactionMapper;
+    private final SalesOrderMapper salesOrderMapper;
+    private final SalesOrderItemMapper salesOrderItemMapper;
     private final AuditLogRecordService auditLogRecordService;
     private final AuditLogMapper auditLogMapper;
     private final AuthQueryMapper authQueryMapper;
@@ -49,6 +55,8 @@ public class OutboundOrdersService {
                                  OutboundOrderItemMapper outboundOrderItemMapper,
                                  InventoryMapper inventoryMapper,
                                  InventoryTransactionMapper inventoryTransactionMapper,
+                                 SalesOrderMapper salesOrderMapper,
+                                 SalesOrderItemMapper salesOrderItemMapper,
                                  AuditLogRecordService auditLogRecordService,
                                  AuditLogMapper auditLogMapper,
                                  AuthQueryMapper authQueryMapper,
@@ -57,6 +65,8 @@ public class OutboundOrdersService {
         this.outboundOrderItemMapper = outboundOrderItemMapper;
         this.inventoryMapper = inventoryMapper;
         this.inventoryTransactionMapper = inventoryTransactionMapper;
+        this.salesOrderMapper = salesOrderMapper;
+        this.salesOrderItemMapper = salesOrderItemMapper;
         this.auditLogRecordService = auditLogRecordService;
         this.auditLogMapper = auditLogMapper;
         this.authQueryMapper = authQueryMapper;
@@ -81,6 +91,8 @@ public class OutboundOrdersService {
             row.put("lineNo", item.getLineNo());
             row.put("productId", item.getProductId() == null ? null : String.valueOf(item.getProductId()));
             row.put("locationId", item.getLocationId() == null ? null : String.valueOf(item.getLocationId()));
+            row.put("sourceOrderItemId", item.getSourceOrderItemId() == null ? null : String.valueOf(item.getSourceOrderItemId()));
+            row.put("sourceLineNo", item.getSourceLineNo());
             row.put("planQty", item.getPlanQty());
             row.put("pickedQty", item.getPickedQty());
             row.put("shippedQty", item.getShippedQty());
@@ -109,6 +121,7 @@ public class OutboundOrdersService {
         order.setOutboundNo(NoGenerator.next("OUT"));
         order.setBizType("SALES");
         order.setStatus("DRAFT");
+        order.setSourceType("MANUAL");
         order.setWarehouseId(req.getWarehouseId());
         order.setCustomerId(req.getCustomerId());
         order.setCreatedBy(RequestContext.userId());
@@ -264,6 +277,7 @@ public class OutboundOrdersService {
         order.setUpdatedBy(RequestContext.userId());
         outboundOrderMapper.updateById(order);
         recordAudit(order, "SHIP", "APPROVED", "SHIPPED", "发运出库", defaultNote(note, "完成发运"));
+        syncSalesAfterShip(order, items);
 
         return Map.of("id", String.valueOf(id), "status", order.getStatus(), "inventoryDeducted", true);
     }
@@ -279,6 +293,8 @@ public class OutboundOrdersService {
             entity.setTenantId(RequestContext.tenantId());
             entity.setOutboundOrderId(order.getId());
             entity.setLineNo(lineNo++);
+            entity.setSourceOrderItemId(null);
+            entity.setSourceLineNo(null);
             entity.setProductId(item.getProductId());
             entity.setLocationId(item.getLocationId());
             entity.setPlanQty(item.getQty());
@@ -427,5 +443,61 @@ public class OutboundOrdersService {
     private String safe(String value) {
         if (value == null) return "";
         return value.replace("\\", "\\\\").replace("\"", "'");
+    }
+
+    private void syncSalesAfterShip(OutboundOrderEntity outbound, List<OutboundOrderItemEntity> outboundItems) {
+        if (!"SALES_ORDER".equals(outbound.getSourceType()) || outbound.getSourceOrderId() == null) {
+            return;
+        }
+        SalesOrderEntity sales = salesOrderMapper.selectOne(new LambdaQueryWrapper<SalesOrderEntity>()
+                .eq(SalesOrderEntity::getTenantId, RequestContext.tenantId())
+                .eq(SalesOrderEntity::getId, outbound.getSourceOrderId()));
+        if (sales == null) {
+            return;
+        }
+
+        for (OutboundOrderItemEntity outboundItem : outboundItems) {
+            if (outboundItem.getSourceOrderItemId() == null) {
+                continue;
+            }
+            SalesOrderItemEntity salesItem = salesOrderItemMapper.selectOne(new LambdaQueryWrapper<SalesOrderItemEntity>()
+                    .eq(SalesOrderItemEntity::getTenantId, RequestContext.tenantId())
+                    .eq(SalesOrderItemEntity::getId, outboundItem.getSourceOrderItemId()));
+            if (salesItem == null) {
+                continue;
+            }
+            BigDecimal before = nullToZero(salesItem.getShippedQty());
+            BigDecimal delta = nullToZero(outboundItem.getShippedQty());
+            BigDecimal after = before.add(delta);
+            if (after.compareTo(salesItem.getOrderQty()) > 0) {
+                after = salesItem.getOrderQty();
+            }
+            salesItem.setShippedQty(after);
+            salesItem.setUpdatedBy(RequestContext.userId());
+            salesOrderItemMapper.updateById(salesItem);
+        }
+
+        String beforeStatus = sales.getStatus();
+        List<SalesOrderItemEntity> salesItems = salesOrderItemMapper.selectList(new LambdaQueryWrapper<SalesOrderItemEntity>()
+                .eq(SalesOrderItemEntity::getTenantId, RequestContext.tenantId())
+                .eq(SalesOrderItemEntity::getSalesOrderId, sales.getId()));
+        boolean anyShipped = salesItems.stream().anyMatch(item -> nullToZero(item.getShippedQty()).compareTo(BigDecimal.ZERO) > 0);
+        boolean allShipped = salesItems.stream().allMatch(item -> nullToZero(item.getShippedQty()).compareTo(item.getOrderQty()) >= 0);
+        String afterStatus = allShipped ? "FULLY_SHIPPED" : (anyShipped ? "PARTIAL_SHIPPED" : "CONFIRMED");
+        if (!afterStatus.equals(beforeStatus)) {
+            sales.setStatus(afterStatus);
+            sales.setUpdatedBy(RequestContext.userId());
+            salesOrderMapper.updateById(sales);
+        }
+
+        String beforeJson = "{\"status\":\"" + beforeStatus + "\"}";
+        String afterJson = "{\"status\":\"" + afterStatus + "\",\"outboundNo\":\"" + outbound.getOutboundNo()
+                + "\",\"sourceOrderNo\":\"" + sales.getSalesNo() + "\"}";
+        auditLogRecordService.record("ERP_SALES", "SHIP_STATUS_SYNC", "SALES_ORDER",
+                String.valueOf(sales.getId()), sales.getSalesNo(), beforeJson, afterJson);
+    }
+
+    private BigDecimal nullToZero(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
     }
 }

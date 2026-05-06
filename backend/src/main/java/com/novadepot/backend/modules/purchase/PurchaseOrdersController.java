@@ -56,4 +56,22 @@ public class PurchaseOrdersController {
     public ApiResponse<Map<String, Object>> cancel(@PathVariable Long id) {
         return ApiResponse.success(service.cancel(id), MDC.get("traceId"));
     }
+
+    @PostMapping("/{id}/actions/create-inbound-draft")
+    @RequirePermission("PURCHASE_TO_INBOUND")
+    public ApiResponse<Map<String, Object>> createInboundDraft(@PathVariable Long id,
+                                                               @RequestBody(required = false) Map<String, Object> body) {
+        return ApiResponse.success(service.createInboundDraft(id, extractLong(body, "locationId")), MDC.get("traceId"));
+    }
+
+    private Long extractLong(Map<String, Object> body, String key) {
+        if (body == null || body.get(key) == null) {
+            return null;
+        }
+        Object value = body.get(key);
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        return Long.valueOf(String.valueOf(value));
+    }
 }

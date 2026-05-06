@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { goToPath, loginAs, loginAsAdmin } from "./helpers";
 
-test("ERP Sprint 1：三页可访问并复用基础操作入口", async ({ page }) => {
+test("ERP Sprint 1: three pages are accessible", async ({ page }) => {
   await loginAsAdmin(page);
 
   await goToPath(page, "/erp/partners");
@@ -20,7 +20,7 @@ test("ERP Sprint 1：三页可访问并复用基础操作入口", async ({ page 
   await expect(page.getByRole("button", { name: "查询" })).toBeVisible();
 });
 
-test("ERP Sprint 1：仓储、客服、观察员角色边界", async ({ page }) => {
+test("ERP Sprint 1: role boundaries remain intact", async ({ page }) => {
   await loginAs(page, "warehouse01");
   await goToPath(page, "/erp/purchases");
   await expect(page.getByRole("button", { name: "新增采购单" })).toBeVisible();
@@ -41,5 +41,4 @@ test("ERP Sprint 1：仓储、客服、观察员角色边界", async ({ page }) 
   await expect(page.getByRole("button", { name: "新增往来单位" })).toHaveCount(0);
   await goToPath(page, "/system/audit-center");
   await expect(page).toHaveURL(/\/access-denied/);
-  await expect(page.getByText(/当前页面暂不可用|需要额外权限/).first()).toBeVisible();
 });

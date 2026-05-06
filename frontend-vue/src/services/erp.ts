@@ -25,6 +25,16 @@ export interface ErpOrder {
   remark?: string;
 }
 
+export interface LinkedWmsOrder {
+  id: string;
+  inboundNo?: string;
+  outboundNo?: string;
+  status: string;
+  sourceType?: string;
+  sourceOrderId?: string;
+  sourceOrderNo?: string;
+}
+
 export interface ErpOrderItem {
   id: string;
   lineNo: number;
@@ -38,6 +48,8 @@ export interface ErpOrderItem {
 export interface ErpOrderDetail {
   order: ErpOrder;
   items: ErpOrderItem[];
+  linkedInbounds?: LinkedWmsOrder[];
+  linkedOutbounds?: LinkedWmsOrder[];
 }
 
 export interface OrderPayload {
@@ -63,11 +75,15 @@ export const erpApi = {
   updatePurchaseOrder: (id: string, payload: OrderPayload) => api.put<{ id: string; status: string }>(`/purchase-orders/${id}`, payload),
   confirmPurchaseOrder: (id: string) => api.post<{ id: string; status: string }>(`/purchase-orders/${id}/actions/confirm`),
   cancelPurchaseOrder: (id: string) => api.post<{ id: string; status: string }>(`/purchase-orders/${id}/actions/cancel`),
+  createInboundDraft: (id: string, payload: { locationId: string | number }) =>
+    api.post<{ id: string; inboundNo: string; status: string }>(`/purchase-orders/${id}/actions/create-inbound-draft`, payload),
 
   listSalesOrders: (query?: { status?: string; partnerId?: string }) => api.get<ErpOrder[]>("/sales-orders", query),
   getSalesOrder: (id: string) => api.get<ErpOrderDetail>(`/sales-orders/${id}`),
   createSalesOrder: (payload: OrderPayload) => api.post<{ id: string; salesNo: string; status: string }>("/sales-orders", payload),
   updateSalesOrder: (id: string, payload: OrderPayload) => api.put<{ id: string; status: string }>(`/sales-orders/${id}`, payload),
   confirmSalesOrder: (id: string) => api.post<{ id: string; status: string }>(`/sales-orders/${id}/actions/confirm`),
-  cancelSalesOrder: (id: string) => api.post<{ id: string; status: string }>(`/sales-orders/${id}/actions/cancel`)
+  cancelSalesOrder: (id: string) => api.post<{ id: string; status: string }>(`/sales-orders/${id}/actions/cancel`),
+  createOutboundDraft: (id: string, payload: { locationId: string | number }) =>
+    api.post<{ id: string; outboundNo: string; status: string }>(`/sales-orders/${id}/actions/create-outbound-draft`, payload)
 };

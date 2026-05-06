@@ -51,6 +51,9 @@ CREATE TABLE IF NOT EXISTS inbound_orders (
   inbound_no VARCHAR(64) NOT NULL,
   biz_type VARCHAR(32) NOT NULL,
   status VARCHAR(32) NOT NULL,
+  source_type VARCHAR(32) NOT NULL DEFAULT 'MANUAL',
+  source_order_id BIGINT NULL,
+  source_order_no VARCHAR(64) NULL,
   warehouse_id BIGINT NOT NULL,
   supplier_id BIGINT NULL,
   expected_at DATETIME(3) NULL,
@@ -62,6 +65,7 @@ CREATE TABLE IF NOT EXISTS inbound_orders (
   updated_by BIGINT NULL,
   deleted TINYINT(1) NOT NULL DEFAULT 0,
   UNIQUE KEY uk_tenant_inbound_no (tenant_id, inbound_no),
+  KEY idx_inbound_source (tenant_id, source_type, source_order_id),
   KEY idx_tenant_status_created (tenant_id, status, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
@@ -70,6 +74,8 @@ CREATE TABLE IF NOT EXISTS inbound_order_items (
   tenant_id BIGINT NOT NULL,
   inbound_order_id BIGINT NOT NULL,
   line_no INT NOT NULL,
+  source_order_item_id BIGINT NULL,
+  source_line_no INT NULL,
   product_id BIGINT NOT NULL,
   location_id BIGINT NULL,
   unit_id BIGINT NOT NULL,
@@ -94,6 +100,9 @@ CREATE TABLE IF NOT EXISTS outbound_orders (
   outbound_no VARCHAR(64) NOT NULL,
   biz_type VARCHAR(32) NOT NULL,
   status VARCHAR(32) NOT NULL,
+  source_type VARCHAR(32) NOT NULL DEFAULT 'MANUAL',
+  source_order_id BIGINT NULL,
+  source_order_no VARCHAR(64) NULL,
   warehouse_id BIGINT NOT NULL,
   customer_id BIGINT NULL,
   expected_ship_at DATETIME(3) NULL,
@@ -105,6 +114,7 @@ CREATE TABLE IF NOT EXISTS outbound_orders (
   updated_by BIGINT NULL,
   deleted TINYINT(1) NOT NULL DEFAULT 0,
   UNIQUE KEY uk_tenant_outbound_no (tenant_id, outbound_no),
+  KEY idx_outbound_source (tenant_id, source_type, source_order_id),
   KEY idx_tenant_status_created (tenant_id, status, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
@@ -113,6 +123,8 @@ CREATE TABLE IF NOT EXISTS outbound_order_items (
   tenant_id BIGINT NOT NULL,
   outbound_order_id BIGINT NOT NULL,
   line_no INT NOT NULL,
+  source_order_item_id BIGINT NULL,
+  source_line_no INT NULL,
   product_id BIGINT NOT NULL,
   location_id BIGINT NULL,
   unit_id BIGINT NOT NULL,
@@ -158,6 +170,116 @@ SET @stmt = (
 PREPARE s2 FROM @stmt;
 EXECUTE s2;
 DEALLOCATE PREPARE s2;
+
+SET @stmt = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE inbound_orders ADD COLUMN source_type VARCHAR(32) NOT NULL DEFAULT ''MANUAL'' AFTER status',
+    'SELECT 1')
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE() AND table_name = 'inbound_orders' AND column_name = 'source_type'
+);
+PREPARE s3 FROM @stmt;
+EXECUTE s3;
+DEALLOCATE PREPARE s3;
+
+SET @stmt = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE inbound_orders ADD COLUMN source_order_id BIGINT NULL AFTER source_type',
+    'SELECT 1')
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE() AND table_name = 'inbound_orders' AND column_name = 'source_order_id'
+);
+PREPARE s4 FROM @stmt;
+EXECUTE s4;
+DEALLOCATE PREPARE s4;
+
+SET @stmt = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE inbound_orders ADD COLUMN source_order_no VARCHAR(64) NULL AFTER source_order_id',
+    'SELECT 1')
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE() AND table_name = 'inbound_orders' AND column_name = 'source_order_no'
+);
+PREPARE s5 FROM @stmt;
+EXECUTE s5;
+DEALLOCATE PREPARE s5;
+
+SET @stmt = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE inbound_order_items ADD COLUMN source_order_item_id BIGINT NULL AFTER line_no',
+    'SELECT 1')
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE() AND table_name = 'inbound_order_items' AND column_name = 'source_order_item_id'
+);
+PREPARE s6 FROM @stmt;
+EXECUTE s6;
+DEALLOCATE PREPARE s6;
+
+SET @stmt = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE inbound_order_items ADD COLUMN source_line_no INT NULL AFTER source_order_item_id',
+    'SELECT 1')
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE() AND table_name = 'inbound_order_items' AND column_name = 'source_line_no'
+);
+PREPARE s7 FROM @stmt;
+EXECUTE s7;
+DEALLOCATE PREPARE s7;
+
+SET @stmt = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE outbound_orders ADD COLUMN source_type VARCHAR(32) NOT NULL DEFAULT ''MANUAL'' AFTER status',
+    'SELECT 1')
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE() AND table_name = 'outbound_orders' AND column_name = 'source_type'
+);
+PREPARE s8 FROM @stmt;
+EXECUTE s8;
+DEALLOCATE PREPARE s8;
+
+SET @stmt = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE outbound_orders ADD COLUMN source_order_id BIGINT NULL AFTER source_type',
+    'SELECT 1')
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE() AND table_name = 'outbound_orders' AND column_name = 'source_order_id'
+);
+PREPARE s9 FROM @stmt;
+EXECUTE s9;
+DEALLOCATE PREPARE s9;
+
+SET @stmt = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE outbound_orders ADD COLUMN source_order_no VARCHAR(64) NULL AFTER source_order_id',
+    'SELECT 1')
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE() AND table_name = 'outbound_orders' AND column_name = 'source_order_no'
+);
+PREPARE s10 FROM @stmt;
+EXECUTE s10;
+DEALLOCATE PREPARE s10;
+
+SET @stmt = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE outbound_order_items ADD COLUMN source_order_item_id BIGINT NULL AFTER line_no',
+    'SELECT 1')
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE() AND table_name = 'outbound_order_items' AND column_name = 'source_order_item_id'
+);
+PREPARE s11 FROM @stmt;
+EXECUTE s11;
+DEALLOCATE PREPARE s11;
+
+SET @stmt = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE outbound_order_items ADD COLUMN source_line_no INT NULL AFTER source_order_item_id',
+    'SELECT 1')
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE() AND table_name = 'outbound_order_items' AND column_name = 'source_line_no'
+);
+PREPARE s12 FROM @stmt;
+EXECUTE s12;
+DEALLOCATE PREPARE s12;
 
 CREATE TABLE IF NOT EXISTS transfer_orders (
   id BIGINT PRIMARY KEY,

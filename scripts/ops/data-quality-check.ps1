@@ -106,6 +106,87 @@ select
   if ($ticketInconsistent -gt 0) { throw "ticket inconsistent rows found: $ticketInconsistent" }
   Write-Host "ticket consistency passed"
 
+  Write-Host "[data-quality] sprint2 ERP/WMS link consistency"
+  $sprint2Inconsistent = [int](Query-Scalar @"
+select
+  (select count(*)
+     from inbound_orders io
+     left join purchase_orders po
+       on po.id = io.source_order_id
+      and po.tenant_id = io.tenant_id
+      and po.deleted = 0
+    where io.tenant_id = 1
+      and io.deleted = 0
+      and io.source_type = 'PURCHASE_ORDER'
+      and po.id is null) +
+  (select count(*)
+     from outbound_orders oo
+     left join sales_orders so
+       on so.id = oo.source_order_id
+      and so.tenant_id = oo.tenant_id
+      and so.deleted = 0
+    where oo.tenant_id = 1
+      and oo.deleted = 0
+      and oo.source_type = 'SALES_ORDER'
+      and so.id is null) +
+  (select count(*)
+     from inbound_order_items ii
+     join inbound_orders io
+       on io.id = ii.inbound_order_id
+      and io.tenant_id = ii.tenant_id
+      and io.deleted = 0
+     left join purchase_order_items pi
+       on pi.id = ii.source_order_item_id
+      and pi.tenant_id = ii.tenant_id
+      and pi.deleted = 0
+    where ii.tenant_id = 1
+      and ii.deleted = 0
+      and io.source_type = 'PURCHASE_ORDER'
+      and pi.id is null) +
+  (select count(*)
+     from outbound_order_items oi
+     join outbound_orders oo
+       on oo.id = oi.outbound_order_id
+      and oo.tenant_id = oi.tenant_id
+      and oo.deleted = 0
+     left join sales_order_items si
+       on si.id = oi.source_order_item_id
+      and si.tenant_id = oi.tenant_id
+      and si.deleted = 0
+    where oi.tenant_id = 1
+      and oi.deleted = 0
+      and oo.source_type = 'SALES_ORDER'
+      and si.id is null) +
+  (select count(*) from purchase_order_items where tenant_id = 1 and deleted = 0 and received_qty > order_qty) +
+  (select count(*) from sales_order_items where tenant_id = 1 and deleted = 0 and shipped_qty > order_qty) +
+  (select count(*)
+     from purchase_orders po
+    where po.tenant_id = 1
+      and po.deleted = 0
+      and po.status = 'FULLY_RECEIVED'
+      and exists (
+        select 1 from purchase_order_items pi
+         where pi.tenant_id = po.tenant_id
+           and pi.purchase_order_id = po.id
+           and pi.deleted = 0
+           and pi.received_qty < pi.order_qty
+      )) +
+  (select count(*)
+     from sales_orders so
+    where so.tenant_id = 1
+      and so.deleted = 0
+      and so.status = 'FULLY_SHIPPED'
+      and exists (
+        select 1 from sales_order_items si
+         where si.tenant_id = so.tenant_id
+           and si.sales_order_id = so.id
+           and si.deleted = 0
+           and si.shipped_qty < si.order_qty
+      ));
+"@)
+  if ($sprint2Inconsistent -gt 0) { throw "sprint2 ERP/WMS inconsistent rows found: $sprint2Inconsistent" }
+  Write-Host "sprint2 ERP/WMS link consistency passed"
+
   Write-Host "[data-quality] passed"
 } catch {
   Write-Error "[data-quality] failed: $($_.Exception.Message)"

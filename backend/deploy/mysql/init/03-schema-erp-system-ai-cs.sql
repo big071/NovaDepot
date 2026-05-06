@@ -129,6 +129,116 @@ DEALLOCATE PREPARE s_erp_so_partner;
 UPDATE purchase_orders SET partner_id = supplier_id WHERE partner_id IS NULL AND supplier_id IS NOT NULL;
 UPDATE sales_orders SET partner_id = customer_id WHERE partner_id IS NULL AND customer_id IS NOT NULL;
 
+SET @stmt = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE inbound_orders ADD COLUMN source_type VARCHAR(32) NOT NULL DEFAULT ''MANUAL'' AFTER status',
+    'SELECT 1')
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE() AND table_name = 'inbound_orders' AND column_name = 'source_type'
+);
+PREPARE s_s2_in_src_type FROM @stmt;
+EXECUTE s_s2_in_src_type;
+DEALLOCATE PREPARE s_s2_in_src_type;
+
+SET @stmt = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE inbound_orders ADD COLUMN source_order_id BIGINT NULL AFTER source_type',
+    'SELECT 1')
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE() AND table_name = 'inbound_orders' AND column_name = 'source_order_id'
+);
+PREPARE s_s2_in_src_id FROM @stmt;
+EXECUTE s_s2_in_src_id;
+DEALLOCATE PREPARE s_s2_in_src_id;
+
+SET @stmt = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE inbound_orders ADD COLUMN source_order_no VARCHAR(64) NULL AFTER source_order_id',
+    'SELECT 1')
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE() AND table_name = 'inbound_orders' AND column_name = 'source_order_no'
+);
+PREPARE s_s2_in_src_no FROM @stmt;
+EXECUTE s_s2_in_src_no;
+DEALLOCATE PREPARE s_s2_in_src_no;
+
+SET @stmt = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE inbound_order_items ADD COLUMN source_order_item_id BIGINT NULL AFTER line_no',
+    'SELECT 1')
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE() AND table_name = 'inbound_order_items' AND column_name = 'source_order_item_id'
+);
+PREPARE s_s2_in_item_src_id FROM @stmt;
+EXECUTE s_s2_in_item_src_id;
+DEALLOCATE PREPARE s_s2_in_item_src_id;
+
+SET @stmt = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE inbound_order_items ADD COLUMN source_line_no INT NULL AFTER source_order_item_id',
+    'SELECT 1')
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE() AND table_name = 'inbound_order_items' AND column_name = 'source_line_no'
+);
+PREPARE s_s2_in_item_src_line FROM @stmt;
+EXECUTE s_s2_in_item_src_line;
+DEALLOCATE PREPARE s_s2_in_item_src_line;
+
+SET @stmt = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE outbound_orders ADD COLUMN source_type VARCHAR(32) NOT NULL DEFAULT ''MANUAL'' AFTER status',
+    'SELECT 1')
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE() AND table_name = 'outbound_orders' AND column_name = 'source_type'
+);
+PREPARE s_s2_out_src_type FROM @stmt;
+EXECUTE s_s2_out_src_type;
+DEALLOCATE PREPARE s_s2_out_src_type;
+
+SET @stmt = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE outbound_orders ADD COLUMN source_order_id BIGINT NULL AFTER source_type',
+    'SELECT 1')
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE() AND table_name = 'outbound_orders' AND column_name = 'source_order_id'
+);
+PREPARE s_s2_out_src_id FROM @stmt;
+EXECUTE s_s2_out_src_id;
+DEALLOCATE PREPARE s_s2_out_src_id;
+
+SET @stmt = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE outbound_orders ADD COLUMN source_order_no VARCHAR(64) NULL AFTER source_order_id',
+    'SELECT 1')
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE() AND table_name = 'outbound_orders' AND column_name = 'source_order_no'
+);
+PREPARE s_s2_out_src_no FROM @stmt;
+EXECUTE s_s2_out_src_no;
+DEALLOCATE PREPARE s_s2_out_src_no;
+
+SET @stmt = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE outbound_order_items ADD COLUMN source_order_item_id BIGINT NULL AFTER line_no',
+    'SELECT 1')
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE() AND table_name = 'outbound_order_items' AND column_name = 'source_order_item_id'
+);
+PREPARE s_s2_out_item_src_id FROM @stmt;
+EXECUTE s_s2_out_item_src_id;
+DEALLOCATE PREPARE s_s2_out_item_src_id;
+
+SET @stmt = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE outbound_order_items ADD COLUMN source_line_no INT NULL AFTER source_order_item_id',
+    'SELECT 1')
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE() AND table_name = 'outbound_order_items' AND column_name = 'source_line_no'
+);
+PREPARE s_s2_out_item_src_line FROM @stmt;
+EXECUTE s_s2_out_item_src_line;
+DEALLOCATE PREPARE s_s2_out_item_src_line;
+
 CREATE TABLE IF NOT EXISTS notifications (
   id BIGINT PRIMARY KEY,
   tenant_id BIGINT NOT NULL,

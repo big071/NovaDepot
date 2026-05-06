@@ -5,10 +5,14 @@ import com.novadepot.backend.common.context.RequestContext;
 import com.novadepot.backend.common.enums.ErrorCode;
 import com.novadepot.backend.common.exception.BizException;
 import com.novadepot.backend.common.utils.NoGenerator;
+import com.novadepot.backend.model.entity.InboundOrderEntity;
+import com.novadepot.backend.model.entity.InboundOrderItemEntity;
 import com.novadepot.backend.model.entity.PartnerEntity;
 import com.novadepot.backend.model.entity.PurchaseOrderEntity;
 import com.novadepot.backend.model.entity.PurchaseOrderItemEntity;
 import com.novadepot.backend.modules.auditlogs.AuditLogRecordService;
+import com.novadepot.backend.repository.InboundOrderItemMapper;
+import com.novadepot.backend.repository.InboundOrderMapper;
 import com.novadepot.backend.repository.PartnerMapper;
 import com.novadepot.backend.repository.PurchaseOrderItemMapper;
 import com.novadepot.backend.repository.PurchaseOrderMapper;
@@ -28,15 +32,21 @@ public class PurchaseOrdersService {
 
     private final PurchaseOrderMapper purchaseOrderMapper;
     private final PurchaseOrderItemMapper purchaseOrderItemMapper;
+    private final InboundOrderMapper inboundOrderMapper;
+    private final InboundOrderItemMapper inboundOrderItemMapper;
     private final PartnerMapper partnerMapper;
     private final AuditLogRecordService auditLogRecordService;
 
     public PurchaseOrdersService(PurchaseOrderMapper purchaseOrderMapper,
                                  PurchaseOrderItemMapper purchaseOrderItemMapper,
+                                 InboundOrderMapper inboundOrderMapper,
+                                 InboundOrderItemMapper inboundOrderItemMapper,
                                  PartnerMapper partnerMapper,
                                  AuditLogRecordService auditLogRecordService) {
         this.purchaseOrderMapper = purchaseOrderMapper;
         this.purchaseOrderItemMapper = purchaseOrderItemMapper;
+        this.inboundOrderMapper = inboundOrderMapper;
+        this.inboundOrderItemMapper = inboundOrderItemMapper;
         this.partnerMapper = partnerMapper;
         this.auditLogRecordService = auditLogRecordService;
     }
@@ -59,9 +69,15 @@ public class PurchaseOrdersService {
                 .eq(PurchaseOrderItemEntity::getTenantId, RequestContext.tenantId())
                 .eq(PurchaseOrderItemEntity::getPurchaseOrderId, id)
                 .orderByAsc(PurchaseOrderItemEntity::getLineNo));
+        List<InboundOrderEntity> linkedInbounds = inboundOrderMapper.selectList(new LambdaQueryWrapper<InboundOrderEntity>()
+                .eq(InboundOrderEntity::getTenantId, RequestContext.tenantId())
+                .eq(InboundOrderEntity::getSourceType, "PURCHASE_ORDER")
+                .eq(InboundOrderEntity::getSourceOrderId, id)
+                .orderByDesc(InboundOrderEntity::getId));
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("order", order);
         result.put("items", items);
+        result.put("linkedInbounds", linkedInbounds);
         return result;
     }
 
@@ -84,7 +100,7 @@ public class PurchaseOrdersService {
     @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> update(Long id, PurchaseOrderRequest req) {
         PurchaseOrderEntity order = mustGet(id);
-        ensureStatus(order, "DRAFT", "仅草稿采购单可编辑");
+        ensureStatus(order, "DRAFT", "Only draft purchase orders can be edited");
         ensurePurchasePartner(req.getPartnerId());
         apply(order, req);
         order.setUpdatedBy(RequestContext.userId());
@@ -97,7 +113,7 @@ public class PurchaseOrdersService {
     @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> confirm(Long id) {
         PurchaseOrderEntity order = mustGet(id);
-        ensureStatus(order, "DRAFT", "仅草稿采购单可确认");
+        ensureStatus(order, "DRAFT", "Only draft purchase orders can be confirmed");
         order.setStatus("CONFIRMED");
         order.setUpdatedBy(RequestContext.userId());
         purchaseOrderMapper.updateById(order);
@@ -109,14 +125,73 @@ public class PurchaseOrdersService {
     public Map<String, Object> cancel(Long id) {
         PurchaseOrderEntity order = mustGet(id);
         if (!List.of("DRAFT", "CONFIRMED").contains(order.getStatus())) {
-            throw new BizException(ErrorCode.BIZ_ERROR.code(), "仅草稿或已确认采购单可取消");
+            throw new BizException(ErrorCode.BIZ_ERROR.code(), "Only draft or confirmed purchase orders can be cancelled");
         }
+        ensureNoActiveInbound(order);
         String before = order.getStatus();
         order.setStatus("CANCELLED");
         order.setUpdatedBy(RequestContext.userId());
         purchaseOrderMapper.updateById(order);
         recordAudit(order, "CANCEL", before, "CANCELLED");
         return result(order);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public Map<String, Object> createInboundDraft(Long id, Long locationId) {
+        PurchaseOrderEntity order = mustGet(id);
+        if (!List.of("CONFIRMED", "PARTIAL_RECEIVED").contains(order.getStatus())) {
+            throw new BizException(ErrorCode.BIZ_ERROR.code(), "Only confirmed or partially received purchase orders can create inbound drafts");
+        }
+        if (locationId == null) {
+            throw new BizException(ErrorCode.BIZ_ERROR.code(), "Please select an inbound location");
+        }
+        ensureNoActiveInbound(order);
+
+        List<PurchaseOrderItemEntity> pendingItems = purchaseOrderItemMapper.selectList(new LambdaQueryWrapper<PurchaseOrderItemEntity>()
+                        .eq(PurchaseOrderItemEntity::getTenantId, RequestContext.tenantId())
+                        .eq(PurchaseOrderItemEntity::getPurchaseOrderId, id)
+                        .orderByAsc(PurchaseOrderItemEntity::getLineNo))
+                .stream()
+                .filter(item -> item.getOrderQty().subtract(nullToZero(item.getReceivedQty())).compareTo(BigDecimal.ZERO) > 0)
+                .toList();
+        if (pendingItems.isEmpty()) {
+            throw new BizException(ErrorCode.BIZ_ERROR.code(), "This purchase order has no pending inbound quantity");
+        }
+
+        InboundOrderEntity inbound = new InboundOrderEntity();
+        inbound.setTenantId(RequestContext.tenantId());
+        inbound.setInboundNo(NoGenerator.next("IN"));
+        inbound.setBizType("PURCHASE");
+        inbound.setStatus("DRAFT");
+        inbound.setSourceType("PURCHASE_ORDER");
+        inbound.setSourceOrderId(order.getId());
+        inbound.setSourceOrderNo(order.getPurchaseNo());
+        inbound.setWarehouseId(order.getWarehouseId());
+        inbound.setSupplierId(order.getPartnerId());
+        inbound.setCreatedBy(RequestContext.userId());
+        inbound.setUpdatedBy(RequestContext.userId());
+        inboundOrderMapper.insert(inbound);
+
+        int lineNo = 1;
+        for (PurchaseOrderItemEntity item : pendingItems) {
+            BigDecimal pendingQty = item.getOrderQty().subtract(nullToZero(item.getReceivedQty()));
+            InboundOrderItemEntity inboundItem = new InboundOrderItemEntity();
+            inboundItem.setTenantId(RequestContext.tenantId());
+            inboundItem.setInboundOrderId(inbound.getId());
+            inboundItem.setLineNo(lineNo++);
+            inboundItem.setSourceOrderItemId(item.getId());
+            inboundItem.setSourceLineNo(item.getLineNo());
+            inboundItem.setProductId(item.getProductId());
+            inboundItem.setLocationId(locationId);
+            inboundItem.setPlanQty(pendingQty);
+            inboundItem.setReceivedQty(BigDecimal.ZERO);
+            inboundItem.setQualifiedQty(BigDecimal.ZERO);
+            inboundItem.setUnitId(1L);
+            inboundOrderItemMapper.insert(inboundItem);
+        }
+
+        recordConversionAudit(order, inbound);
+        return Map.of("id", String.valueOf(inbound.getId()), "inboundNo", inbound.getInboundNo(), "status", inbound.getStatus());
     }
 
     private void apply(PurchaseOrderEntity order, PurchaseOrderRequest req) {
@@ -158,10 +233,10 @@ public class PurchaseOrdersService {
                 .eq(PartnerEntity::getTenantId, RequestContext.tenantId())
                 .eq(PartnerEntity::getId, partnerId));
         if (partner == null || !"ACTIVE".equals(partner.getStatus())) {
-            throw new BizException(ErrorCode.BIZ_ERROR.code(), "往来单位不存在或已停用");
+            throw new BizException(ErrorCode.BIZ_ERROR.code(), "Partner does not exist or is disabled");
         }
         if (!List.of("SUPPLIER", "BOTH").contains(partner.getPartnerType())) {
-            throw new BizException(ErrorCode.BIZ_ERROR.code(), "采购单只能选择供应商或双向往来单位");
+            throw new BizException(ErrorCode.BIZ_ERROR.code(), "Purchase orders can only use supplier or both-type partners");
         }
     }
 
@@ -170,7 +245,7 @@ public class PurchaseOrdersService {
                 .eq(PurchaseOrderEntity::getTenantId, RequestContext.tenantId())
                 .eq(PurchaseOrderEntity::getId, id));
         if (order == null) {
-            throw new BizException(ErrorCode.BIZ_ERROR.code(), "采购单不存在");
+            throw new BizException(ErrorCode.BIZ_ERROR.code(), "Purchase order does not exist");
         }
         return order;
     }
@@ -181,6 +256,21 @@ public class PurchaseOrdersService {
         }
     }
 
+    private void ensureNoActiveInbound(PurchaseOrderEntity order) {
+        Long count = inboundOrderMapper.selectCount(new LambdaQueryWrapper<InboundOrderEntity>()
+                .eq(InboundOrderEntity::getTenantId, RequestContext.tenantId())
+                .eq(InboundOrderEntity::getSourceType, "PURCHASE_ORDER")
+                .eq(InboundOrderEntity::getSourceOrderId, order.getId())
+                .ne(InboundOrderEntity::getStatus, "CANCELED"));
+        if (count != null && count > 0) {
+            throw new BizException(ErrorCode.BIZ_ERROR.code(), "This purchase order already has an active linked inbound order");
+        }
+    }
+
+    private BigDecimal nullToZero(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
+    }
+
     private Map<String, Object> result(PurchaseOrderEntity order) {
         return Map.of("id", String.valueOf(order.getId()), "purchaseNo", order.getPurchaseNo(), "status", order.getStatus());
     }
@@ -189,5 +279,12 @@ public class PurchaseOrdersService {
         String beforeJson = before == null ? null : "{\"status\":\"" + before + "\"}";
         String afterJson = "{\"status\":\"" + after + "\",\"partnerId\":\"" + order.getPartnerId() + "\",\"totalAmount\":\"" + order.getTotalAmount() + "\"}";
         auditLogRecordService.record(MODULE, action, RESOURCE_TYPE, String.valueOf(order.getId()), order.getPurchaseNo(), beforeJson, afterJson);
+    }
+
+    private void recordConversionAudit(PurchaseOrderEntity order, InboundOrderEntity inbound) {
+        String afterJson = "{\"status\":\"" + order.getStatus() + "\",\"inboundId\":\"" + inbound.getId()
+                + "\",\"inboundNo\":\"" + inbound.getInboundNo() + "\",\"sourceOrderNo\":\"" + order.getPurchaseNo() + "\"}";
+        auditLogRecordService.record(MODULE, "CREATE_INBOUND_DRAFT", RESOURCE_TYPE, String.valueOf(order.getId()), order.getPurchaseNo(), null, afterJson);
+        auditLogRecordService.record("WMS_INBOUND", "CREATE_FROM_PURCHASE", "INBOUND_ORDER", String.valueOf(inbound.getId()), inbound.getInboundNo(), null, afterJson);
     }
 }

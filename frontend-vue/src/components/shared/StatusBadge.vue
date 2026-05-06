@@ -14,9 +14,14 @@ const type = computed(() => {
     case "DRAFT":
       return "default";
     case "CONFIRMED":
+    case "PARTIAL_RECEIVED":
+    case "PARTIAL_SHIPPED":
       return "info";
     case "COMPLETED":
     case "POSTED":
+    case "FULLY_RECEIVED":
+    case "FULLY_SHIPPED":
+    case "SHIPPED":
       return "success";
     case "CANCELLED":
     case "CANCELED":

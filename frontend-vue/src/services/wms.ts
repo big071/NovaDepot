@@ -101,6 +101,9 @@ export interface InboundOrder {
   warehouseId: string;
   supplierId?: number;
   status: string;
+  sourceType?: string;
+  sourceOrderId?: string;
+  sourceOrderNo?: string;
   createdBy?: string;
   createdAt?: string;
 }
@@ -111,6 +114,9 @@ export interface OutboundOrder {
   warehouseId: string;
   customerId?: number;
   status: string;
+  sourceType?: string;
+  sourceOrderId?: string;
+  sourceOrderNo?: string;
   createdBy?: string;
   createdAt?: string;
 }

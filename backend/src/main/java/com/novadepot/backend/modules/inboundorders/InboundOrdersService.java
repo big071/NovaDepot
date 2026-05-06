@@ -12,6 +12,8 @@ import com.novadepot.backend.model.entity.InboundOrderEntity;
 import com.novadepot.backend.model.entity.InboundOrderItemEntity;
 import com.novadepot.backend.model.entity.InventoryEntity;
 import com.novadepot.backend.model.entity.InventoryTransactionEntity;
+import com.novadepot.backend.model.entity.PurchaseOrderEntity;
+import com.novadepot.backend.model.entity.PurchaseOrderItemEntity;
 import com.novadepot.backend.modules.auditlogs.AuditLogRecordService;
 import com.novadepot.backend.repository.AuditLogMapper;
 import com.novadepot.backend.repository.AuthQueryMapper;
@@ -19,6 +21,8 @@ import com.novadepot.backend.repository.InboundOrderItemMapper;
 import com.novadepot.backend.repository.InboundOrderMapper;
 import com.novadepot.backend.repository.InventoryMapper;
 import com.novadepot.backend.repository.InventoryTransactionMapper;
+import com.novadepot.backend.repository.PurchaseOrderItemMapper;
+import com.novadepot.backend.repository.PurchaseOrderMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -40,6 +44,8 @@ public class InboundOrdersService {
     private final InboundOrderItemMapper inboundOrderItemMapper;
     private final InventoryMapper inventoryMapper;
     private final InventoryTransactionMapper inventoryTransactionMapper;
+    private final PurchaseOrderMapper purchaseOrderMapper;
+    private final PurchaseOrderItemMapper purchaseOrderItemMapper;
     private final AuditLogRecordService auditLogRecordService;
     private final AuditLogMapper auditLogMapper;
     private final AuthQueryMapper authQueryMapper;
@@ -49,6 +55,8 @@ public class InboundOrdersService {
                                 InboundOrderItemMapper inboundOrderItemMapper,
                                 InventoryMapper inventoryMapper,
                                 InventoryTransactionMapper inventoryTransactionMapper,
+                                PurchaseOrderMapper purchaseOrderMapper,
+                                PurchaseOrderItemMapper purchaseOrderItemMapper,
                                 AuditLogRecordService auditLogRecordService,
                                 AuditLogMapper auditLogMapper,
                                 AuthQueryMapper authQueryMapper,
@@ -57,6 +65,8 @@ public class InboundOrdersService {
         this.inboundOrderItemMapper = inboundOrderItemMapper;
         this.inventoryMapper = inventoryMapper;
         this.inventoryTransactionMapper = inventoryTransactionMapper;
+        this.purchaseOrderMapper = purchaseOrderMapper;
+        this.purchaseOrderItemMapper = purchaseOrderItemMapper;
         this.auditLogRecordService = auditLogRecordService;
         this.auditLogMapper = auditLogMapper;
         this.authQueryMapper = authQueryMapper;
@@ -81,6 +91,8 @@ public class InboundOrdersService {
             row.put("lineNo", item.getLineNo());
             row.put("productId", item.getProductId() == null ? null : String.valueOf(item.getProductId()));
             row.put("locationId", item.getLocationId() == null ? null : String.valueOf(item.getLocationId()));
+            row.put("sourceOrderItemId", item.getSourceOrderItemId() == null ? null : String.valueOf(item.getSourceOrderItemId()));
+            row.put("sourceLineNo", item.getSourceLineNo());
             row.put("planQty", item.getPlanQty());
             row.put("receivedQty", item.getReceivedQty());
             row.put("qualifiedQty", item.getQualifiedQty());
@@ -109,6 +121,7 @@ public class InboundOrdersService {
         order.setInboundNo(NoGenerator.next("IN"));
         order.setBizType("PURCHASE");
         order.setStatus("DRAFT");
+        order.setSourceType("MANUAL");
         order.setWarehouseId(req.getWarehouseId());
         order.setSupplierId(req.getSupplierId());
         order.setCreatedBy(RequestContext.userId());
@@ -273,6 +286,7 @@ public class InboundOrdersService {
         order.setUpdatedBy(RequestContext.userId());
         inboundOrderMapper.updateById(order);
         recordAudit(order, "POST", "APPROVED", "POSTED", "过账入库", defaultNote(note, "完成入库过账"));
+        syncPurchaseAfterPost(order, items);
 
         return Map.of("id", String.valueOf(id), "status", order.getStatus(), "inventoryPosted", true);
     }
@@ -288,6 +302,8 @@ public class InboundOrdersService {
             entity.setTenantId(RequestContext.tenantId());
             entity.setInboundOrderId(order.getId());
             entity.setLineNo(lineNo++);
+            entity.setSourceOrderItemId(null);
+            entity.setSourceLineNo(null);
             entity.setProductId(item.getProductId());
             entity.setLocationId(item.getLocationId());
             entity.setPlanQty(item.getQty());
@@ -436,5 +452,61 @@ public class InboundOrdersService {
     private String safe(String value) {
         if (value == null) return "";
         return value.replace("\\", "\\\\").replace("\"", "'");
+    }
+
+    private void syncPurchaseAfterPost(InboundOrderEntity inbound, List<InboundOrderItemEntity> inboundItems) {
+        if (!"PURCHASE_ORDER".equals(inbound.getSourceType()) || inbound.getSourceOrderId() == null) {
+            return;
+        }
+        PurchaseOrderEntity purchase = purchaseOrderMapper.selectOne(new LambdaQueryWrapper<PurchaseOrderEntity>()
+                .eq(PurchaseOrderEntity::getTenantId, RequestContext.tenantId())
+                .eq(PurchaseOrderEntity::getId, inbound.getSourceOrderId()));
+        if (purchase == null) {
+            return;
+        }
+
+        for (InboundOrderItemEntity inboundItem : inboundItems) {
+            if (inboundItem.getSourceOrderItemId() == null) {
+                continue;
+            }
+            PurchaseOrderItemEntity purchaseItem = purchaseOrderItemMapper.selectOne(new LambdaQueryWrapper<PurchaseOrderItemEntity>()
+                    .eq(PurchaseOrderItemEntity::getTenantId, RequestContext.tenantId())
+                    .eq(PurchaseOrderItemEntity::getId, inboundItem.getSourceOrderItemId()));
+            if (purchaseItem == null) {
+                continue;
+            }
+            BigDecimal before = nullToZero(purchaseItem.getReceivedQty());
+            BigDecimal delta = nullToZero(inboundItem.getQualifiedQty());
+            BigDecimal after = before.add(delta);
+            if (after.compareTo(purchaseItem.getOrderQty()) > 0) {
+                after = purchaseItem.getOrderQty();
+            }
+            purchaseItem.setReceivedQty(after);
+            purchaseItem.setUpdatedBy(RequestContext.userId());
+            purchaseOrderItemMapper.updateById(purchaseItem);
+        }
+
+        String beforeStatus = purchase.getStatus();
+        List<PurchaseOrderItemEntity> purchaseItems = purchaseOrderItemMapper.selectList(new LambdaQueryWrapper<PurchaseOrderItemEntity>()
+                .eq(PurchaseOrderItemEntity::getTenantId, RequestContext.tenantId())
+                .eq(PurchaseOrderItemEntity::getPurchaseOrderId, purchase.getId()));
+        boolean anyReceived = purchaseItems.stream().anyMatch(item -> nullToZero(item.getReceivedQty()).compareTo(BigDecimal.ZERO) > 0);
+        boolean allReceived = purchaseItems.stream().allMatch(item -> nullToZero(item.getReceivedQty()).compareTo(item.getOrderQty()) >= 0);
+        String afterStatus = allReceived ? "FULLY_RECEIVED" : (anyReceived ? "PARTIAL_RECEIVED" : "CONFIRMED");
+        if (!afterStatus.equals(beforeStatus)) {
+            purchase.setStatus(afterStatus);
+            purchase.setUpdatedBy(RequestContext.userId());
+            purchaseOrderMapper.updateById(purchase);
+        }
+
+        String beforeJson = "{\"status\":\"" + beforeStatus + "\"}";
+        String afterJson = "{\"status\":\"" + afterStatus + "\",\"inboundNo\":\"" + inbound.getInboundNo()
+                + "\",\"sourceOrderNo\":\"" + purchase.getPurchaseNo() + "\"}";
+        auditLogRecordService.record("ERP_PURCHASE", "RECEIVE_STATUS_SYNC", "PURCHASE_ORDER",
+                String.valueOf(purchase.getId()), purchase.getPurchaseNo(), beforeJson, afterJson);
+    }
+
+    private BigDecimal nullToZero(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
     }
 }
