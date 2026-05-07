@@ -704,3 +704,24 @@ CREATE TABLE IF NOT EXISTS payments (
   KEY idx_payment_ledger (tenant_id, direction, ledger_id),
   KEY idx_payment_paid_at (tenant_id, paid_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS backup_records (
+  id BIGINT PRIMARY KEY,
+  tenant_id BIGINT NOT NULL,
+  backup_no VARCHAR(64) NOT NULL,
+  file_name VARCHAR(255) NULL,
+  file_path VARCHAR(1000) NULL,
+  file_size BIGINT NULL,
+  checksum VARCHAR(128) NULL,
+  status VARCHAR(32) NOT NULL,
+  started_at DATETIME(3) NOT NULL,
+  finished_at DATETIME(3) NULL,
+  error_message VARCHAR(1000) NULL,
+  created_at DATETIME(3) NOT NULL,
+  created_by BIGINT NULL,
+  updated_at DATETIME(3) NOT NULL,
+  updated_by BIGINT NULL,
+  deleted TINYINT(1) NOT NULL DEFAULT 0,
+  UNIQUE KEY uk_tenant_backup_no (tenant_id, backup_no),
+  KEY idx_backup_status_time (tenant_id, status, started_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

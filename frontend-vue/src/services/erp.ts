@@ -61,6 +61,15 @@ export interface OrderPayload {
   items: Array<{ productId: number; orderQty: number; unitPrice: number }>;
 }
 
+export interface ImportSummary {
+  reportId?: string | null;
+  totalRows: number;
+  successRows: number;
+  failedRows: number;
+  skippedRows: number;
+  errors: string[];
+}
+
 export const erpApi = {
   listPartners: (query?: { keyword?: string; partnerType?: string }) => api.get<Partner[]>("/partners", query),
   getPartner: (id: string) => api.get<Partner>(`/partners/${id}`),
@@ -68,6 +77,9 @@ export const erpApi = {
   updatePartner: (id: string, payload: Partial<Partner>) => api.put<{ id: string }>(`/partners/${id}`, payload),
   enablePartner: (id: string) => api.post<{ id: string; status: string }>(`/partners/${id}/actions/enable`),
   disablePartner: (id: string) => api.post<{ id: string; status: string }>(`/partners/${id}/actions/disable`),
+  exportPartnerImportTemplate: () => fetchRaw("/partners/import/template"),
+  getPartnerImportErrorReport: (reportId: string) => fetchRaw(`/partners/import/errors/${reportId}`),
+  importPartners: (csvContent: string) => api.post<ImportSummary>("/partners/import", csvContent),
 
   listPurchaseOrders: (query?: { status?: string; partnerId?: string }) => api.get<ErpOrder[]>("/purchase-orders", query),
   getPurchaseOrder: (id: string) => api.get<ErpOrderDetail>(`/purchase-orders/${id}`),
@@ -87,3 +99,15 @@ export const erpApi = {
   createOutboundDraft: (id: string, payload: { locationId: string | number }) =>
     api.post<{ id: string; outboundNo: string; status: string }>(`/sales-orders/${id}/actions/create-outbound-draft`, payload)
 };
+
+async function fetchRaw(path: string) {
+  const base = import.meta.env.VITE_API_BASE_URL ?? "/api/v1";
+  const token = localStorage.getItem("novadepot-token") ?? "";
+  const res = await fetch(`${base}${path}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!res.ok) {
+    throw new Error(`Download failed: ${res.status}`);
+  }
+  return res.text();
+}

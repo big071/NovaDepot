@@ -288,6 +288,77 @@ select
   if ($sprint3Inconsistent -gt 0) { throw "sprint3 finance/stocktake inconsistent rows found: $sprint3Inconsistent" }
   Write-Host "sprint3 finance and stocktake consistency passed"
 
+  Write-Host "[data-quality] sprint4 import, backup and tenant reserve consistency"
+  $tenantMissing = [int](Query-Scalar @"
+select count(*)
+from information_schema.tables t
+where t.table_schema = database()
+  and t.table_type = 'BASE TABLE'
+  and t.table_name in (
+    'products','product_categories','product_units','warehouses','warehouse_locations','inventory','inventory_transactions',
+    'inbound_orders','inbound_order_items','outbound_orders','outbound_order_items','partners','purchase_orders',
+    'purchase_order_items','sales_orders','sales_order_items','payables','receivables','payments','stocktake_orders',
+    'stocktake_order_items','import_error_reports','backup_records','audit_logs','customer_service_sessions',
+    'customer_service_messages','customer_service_tickets','faq_knowledge','sop_knowledge','ai_conversations',
+    'ai_messages','agent_task_runs','notifications'
+  )
+  and not exists (
+    select 1 from information_schema.columns c
+    where c.table_schema = t.table_schema
+      and c.table_name = t.table_name
+      and c.column_name = 'tenant_id'
+  );
+"@)
+  if ($tenantMissing -gt 0) { throw "tenant_id missing business tables found: $tenantMissing" }
+
+  $sprint4Inconsistent = [int](Query-Scalar @"
+select
+  (select count(*)
+     from inventory_transactions
+    where tenant_id = 1
+      and deleted = 0
+      and biz_type = 'INVENTORY_IMPORT'
+      and before_qty + change_qty <> after_qty) +
+  (select count(*)
+     from import_error_reports
+    where tenant_id = 1
+      and deleted = 0
+      and module in ('PRODUCT_IMPORT','INVENTORY_IMPORT','PARTNER_IMPORT')
+      and (report_id is null or report_id = '' or content is null or content = '')) +
+  (select count(*)
+     from backup_records
+    where tenant_id = 1
+      and deleted = 0
+      and (status not in ('RUNNING','SUCCESS','FAILED')
+        or backup_no is null
+        or backup_no = ''
+        or (status = 'SUCCESS' and (file_size is null or file_size <= 0)))) +
+  (select count(*)
+     from products p
+    where p.tenant_id = 1
+      and p.deleted = 0
+      and exists (
+        select 1 from products d
+         where d.tenant_id = p.tenant_id
+           and d.product_code = p.product_code
+           and d.deleted = 0
+           and d.id <> p.id
+      )) +
+  (select count(*)
+     from partners p
+    where p.tenant_id = 1
+      and p.deleted = 0
+      and exists (
+        select 1 from partners d
+         where d.tenant_id = p.tenant_id
+           and d.partner_code = p.partner_code
+           and d.deleted = 0
+           and d.id <> p.id
+      ));
+"@)
+  if ($sprint4Inconsistent -gt 0) { throw "sprint4 import/backup inconsistent rows found: $sprint4Inconsistent" }
+  Write-Host "sprint4 import, backup and tenant reserve consistency passed"
+
   Write-Host "[data-quality] passed"
 } catch {
   Write-Error "[data-quality] failed: $($_.Exception.Message)"

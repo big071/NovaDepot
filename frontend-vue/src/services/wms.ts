@@ -95,6 +95,15 @@ export interface InventoryTransaction {
   occurredAt?: string;
 }
 
+export interface ImportSummary {
+  reportId?: string | null;
+  totalRows: number;
+  successRows: number;
+  failedRows: number;
+  skippedRows: number;
+  errors: string[];
+}
+
 export interface StocktakeOrder {
   id: string;
   stocktakeNo: string;
@@ -215,9 +224,9 @@ export const wmsApi = {
     invalidatePrefix("products");
     return result;
   },
-  exportProductImportTemplate: () => api.get<string>("/products/import/template"),
-  getProductImportErrorReport: (reportId: string) => api.get<string>(`/products/import/errors/${reportId}`),
-  importProducts: (csvContent: string) => api.post<Record<string, unknown>>("/products/import", csvContent),
+  exportProductImportTemplate: () => fetchRaw("/products/import/template"),
+  getProductImportErrorReport: (reportId: string) => fetchRaw(`/products/import/errors/${reportId}`),
+  importProducts: (csvContent: string) => api.post<ImportSummary>("/products/import", csvContent),
 
   listWarehouses: (options?: QueryOptions) =>
     withCache(getCacheKey("warehouses"), () => api.get<Warehouse[]>("/warehouses"), options, 30_000),
@@ -289,7 +298,9 @@ export const wmsApi = {
       options,
       15_000
     ),
-  importInventory: (csvContent: string) => api.post<Record<string, unknown>>("/inventory/import", csvContent),
+  exportInventoryImportTemplate: () => fetchRaw("/inventory/import/template"),
+  getInventoryImportErrorReport: (reportId: string) => fetchRaw(`/inventory/import/errors/${reportId}`),
+  importInventory: (csvContent: string) => api.post<ImportSummary>("/inventory/import", csvContent),
   inventoryExportFields: () => api.get<string[]>("/inventory/export/fields"),
 
   listStocktakes: (query?: { status?: string }) => api.get<StocktakeOrder[]>("/stocktakes", query),
@@ -438,3 +449,15 @@ export const wmsApi = {
     return result;
   }
 };
+
+async function fetchRaw(path: string) {
+  const base = import.meta.env.VITE_API_BASE_URL ?? "/api/v1";
+  const token = localStorage.getItem("novadepot-token") ?? "";
+  const res = await fetch(`${base}${path}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!res.ok) {
+    throw new Error(`Download failed: ${res.status}`);
+  }
+  return res.text();
+}

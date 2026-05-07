@@ -1,11 +1,11 @@
-<template>
+﻿<template>
   <section class="space-y-4">
     <header class="nd-hero">
       <div class="nd-hero-header">
         <div>
           <p class="text-xs uppercase tracking-[0.14em] text-text-secondary">WMS</p>
           <h1 class="nd-page-title">入库单闭环管理</h1>
-          <p class="nd-page-subtitle">支持手工入库和采购来源入库草稿，过账后更新库存。</p>
+          <p class="nd-page-subtitle">Manual inbound and purchase-sourced inbound drafts with posting.</p>
         </div>
         <div class="flex gap-2">
           <n-button class="nd-soft-focus" :loading="loading" @click="loadList">刷新</n-button>
@@ -18,35 +18,37 @@
     <n-alert v-else-if="successText" type="success" :show-icon="false">{{ successText }}</n-alert>
 
     <article class="nd-table-shell">
-      <div class="nd-table-head"><h3 class="nd-section-title">入库单列表</h3></div>
+      <div class="nd-table-head"><h3 class="nd-section-title">Inbound List</h3></div>
       <div class="nd-table-body">
         <n-data-table :columns="columns" :data="rows" :loading="loading" :bordered="false" />
       </div>
     </article>
 
-    <n-modal v-model:show="createVisible" preset="card" title="新建入库单" class="max-w-xl">
+    <n-modal v-model:show="createVisible" preset="card" title="New Inbound" class="max-w-xl">
       <div class="space-y-3">
-        <n-select v-model:value="createForm.warehouseId" :options="warehouseOptions" placeholder="选择仓库" @update:value="onWarehouseChange" />
-        <n-input-number v-model:value="createForm.supplierId" :show-button="false" placeholder="供应商ID（可选）" />
-        <n-select v-model:value="createForm.productId" :options="productOptions" placeholder="选择商品" />
-        <n-select v-model:value="createForm.locationId" :options="locationOptions" placeholder="选择库位" />
-        <n-input-number v-model:value="createForm.qty" :show-button="false" placeholder="数量" />
+        <n-select v-model:value="createForm.warehouseId" :options="warehouseOptions" placeholder="閫夋嫨浠撳簱" @update:value="onWarehouseChange" />
+        <n-input-number v-model:value="createForm.supplierId" :show-button="false" placeholder="渚涘簲鍟咺D锛堝彲閫夛級" />
+        <n-select v-model:value="createForm.productId" :options="productOptions" placeholder="閫夋嫨鍟嗗搧" />
+        <n-select v-model:value="createForm.locationId" :options="locationOptions" placeholder="閫夋嫨搴撲綅" />
+        <n-input-number v-model:value="createForm.qty" :show-button="false" placeholder="鏁伴噺" />
       </div>
       <template #footer>
         <div class="flex justify-end gap-2">
-          <n-button @click="createVisible = false">取消</n-button>
-          <n-button type="primary" :loading="submitting" @click="onCreate">保存草稿</n-button>
+          <n-button @click="createVisible = false">鍙栨秷</n-button>
+          <n-button type="primary" :loading="submitting" @click="onCreate">淇濆瓨鑽夌</n-button>
         </div>
       </template>
     </n-modal>
 
-    <n-modal v-model:show="detailVisible" preset="card" title="入库单详情" class="max-w-5xl">
+    <n-modal v-model:show="detailVisible" preset="card" title="Inbound Detail" class="max-w-5xl">
       <div class="space-y-3">
         <n-descriptions bordered :column="3" size="small" label-placement="left" v-if="detail.order">
-          <n-descriptions-item label="单号">{{ detail.order.inboundNo }}</n-descriptions-item>
-          <n-descriptions-item label="状态">{{ statusText(detail.order.status) }}</n-descriptions-item>
-          <n-descriptions-item label="来源">{{ sourceText(detail.order) }}</n-descriptions-item>
+          <n-descriptions-item label="鍗曞彿">{{ detail.order.inboundNo }}</n-descriptions-item>
+          <n-descriptions-item label="Status">{{ statusText(detail.order.status) }}</n-descriptions-item>
+          <n-descriptions-item label="鏉ユ簮">{{ sourceText(detail.order) }}</n-descriptions-item>
         </n-descriptions>
+        <div class="nd-print-hidden flex justify-end"><n-button v-if="authStore.hasPermission('INBOUND_PRINT')" class="nd-soft-focus" @click="printCurrent">打印入库单</n-button></div>
+        <div class="nd-print-sheet"><h2>入库单</h2><p>单号：{{ detail.order?.inboundNo }}</p><p>来源：{{ sourceText(detail.order) }}</p><table class="nd-print-table"><tbody><tr v-for="item in detail.items" :key="item.id"><td>{{ item.lineNo }}</td><td>{{ item.productId }}</td><td>{{ item.locationId }}</td><td>{{ item.planQty }}</td><td>{{ item.receivedQty }}</td></tr></tbody></table><p>仓库签字：________  经办人签字：________</p></div>
         <n-data-table :columns="timelineColumns" :data="detail.timeline" :bordered="false" size="small" />
         <n-data-table :columns="itemColumns" :data="detail.items" :bordered="false" size="small" />
       </div>
@@ -89,11 +91,11 @@ const productOptions = computed(() => products.value.map((v) => ({ label: `${v.p
 const locationOptions = computed(() => locations.value.map((v) => ({ label: `${v.locationCode} ${v.locationName}`, value: v.id })));
 
 const columns: DataTableColumns<InboundOrder> = [
-  { title: "单号", key: "inboundNo", minWidth: 180 },
-  { title: "来源", key: "source", minWidth: 160, render: (row) => sourceText(row) },
-  { title: "状态", key: "status", width: 120, render: (row) => h(NTag, { type: statusType(row.status), bordered: false }, { default: () => statusText(row.status) }) },
+  { title: "鍗曞彿", key: "inboundNo", minWidth: 180 },
+  { title: "鏉ユ簮", key: "source", minWidth: 160, render: (row) => sourceText(row) },
+  { title: "Status", key: "status", width: 120, render: (row) => h(NTag, { type: statusType(row.status), bordered: false }, { default: () => statusText(row.status) }) },
   {
-    title: "操作",
+    title: "鎿嶄綔",
     key: "actions",
     width: 560,
     render: (row) =>
@@ -110,20 +112,20 @@ const columns: DataTableColumns<InboundOrder> = [
 ];
 
 const itemColumns: DataTableColumns<InboundOrderItem> = [
-  { title: "行号", key: "lineNo" },
-  { title: "商品ID", key: "productId" },
-  { title: "库位ID", key: "locationId" },
-  { title: "计划数量", key: "planQty" },
-  { title: "实收数量", key: "receivedQty" },
-  { title: "合格数量", key: "qualifiedQty" }
+  { title: "琛屽彿", key: "lineNo" },
+  { title: "鍟嗗搧ID", key: "productId" },
+  { title: "搴撲綅ID", key: "locationId" },
+  { title: "璁″垝鏁伴噺", key: "planQty" },
+  { title: "瀹炴敹鏁伴噺", key: "receivedQty" },
+  { title: "鍚堟牸鏁伴噺", key: "qualifiedQty" }
 ];
 
 const timelineColumns: DataTableColumns<OrderTimelineItem> = [
-  { title: "时间", key: "occurredAt", width: 180 },
-  { title: "操作人", key: "operatorName", width: 120 },
-  { title: "动作", key: "actionLabel", width: 140 },
-  { title: "状态变化", key: "status", render: (row) => `${row.statusFrom || "-"} -> ${row.statusTo || "-"}` },
-  { title: "备注", key: "note" }
+  { title: "鏃堕棿", key: "occurredAt", width: 180 },
+  { title: "Operator", key: "operatorName", width: 120 },
+  { title: "鍔ㄤ綔", key: "actionLabel", width: 140 },
+  { title: "Status Change", key: "status", render: (row) => `${row.statusFrom || "-"} -> ${row.statusTo || "-"}` },
+  { title: "澶囨敞", key: "note" }
 ];
 
 function actionBtn(label: string, onClick: () => void, enabled: boolean, rowId: string, primary = false) {
@@ -138,7 +140,7 @@ function statusType(status: string) {
 }
 
 function statusText(status: string) {
-  return ({ DRAFT: "草稿", SUBMITTED: "待审核", APPROVED: "已审核", REJECTED: "已驳回", CANCELED: "已作废", POSTED: "已过账" } as Record<string, string>)[status] || status;
+  return ({ DRAFT: "DRAFT", SUBMITTED: "SUBMITTED", APPROVED: "APPROVED", REJECTED: "REJECTED", CANCELED: "CANCELED", POSTED: "POSTED" } as Record<string, string>)[status] || status;
 }
 
 function sourceText(row: InboundOrder) {
@@ -166,7 +168,7 @@ async function loadList() {
   try {
     rows.value = await wmsApi.listInboundOrders({ force: true });
   } catch (e) {
-    errorText.value = e instanceof Error ? e.message : "入库单加载失败";
+    errorText.value = e instanceof Error ? e.message : "Inbound order loading failed";
   } finally {
     loading.value = false;
   }
@@ -174,7 +176,7 @@ async function loadList() {
 
 async function onCreate() {
   if (!createForm.warehouseId || !createForm.productId || !createForm.locationId || Number(createForm.qty) <= 0) {
-    ui.warning("请补全仓库、商品、库位与数量");
+    ui.warning("璇疯ˉ鍏ㄤ粨搴撱€佸晢鍝併€佸簱浣嶄笌鏁伴噺");
     return;
   }
   submitting.value = true;
@@ -185,10 +187,10 @@ async function onCreate() {
       items: [{ productId: createForm.productId, locationId: createForm.locationId, qty: Number(createForm.qty) }]
     });
     createVisible.value = false;
-    successText.value = "入库草稿已创建";
+    successText.value = "Inbound draft created";
     await loadList();
   } catch (e) {
-    errorText.value = e instanceof Error ? e.message : "创建失败";
+    errorText.value = e instanceof Error ? e.message : "鍒涘缓澶辫触";
   } finally {
     submitting.value = false;
   }
@@ -199,8 +201,12 @@ async function openDetail(id: string) {
   detailVisible.value = true;
 }
 
+function printCurrent() {
+  window.print();
+}
+
 function askNote(action: string) {
-  return window.prompt(`${action}备注（可留空）：`) || "";
+  return window.prompt(`${action}澶囨敞锛堝彲鐣欑┖锛夛細`) || "";
 }
 
 async function runAction(action: "submit" | "withdraw" | "approve" | "reject" | "cancel" | "post", row: InboundOrder) {
@@ -213,10 +219,10 @@ async function runAction(action: "submit" | "withdraw" | "approve" | "reject" | 
     if (action === "reject") await wmsApi.rejectInboundOrder(row.id, note);
     if (action === "cancel") await wmsApi.cancelInboundOrder(row.id, note);
     if (action === "post") await wmsApi.postInboundOrder(row.id, note);
-    successText.value = "操作成功";
+    successText.value = "鎿嶄綔鎴愬姛";
     await loadList();
   } catch (e) {
-    errorText.value = e instanceof Error ? e.message : "操作失败";
+    errorText.value = e instanceof Error ? e.message : "鎿嶄綔澶辫触";
   } finally {
     actionLoading.value = "";
   }

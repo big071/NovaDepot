@@ -1,0 +1,38 @@
+@media print {
+  aside,
+  .nd-print-hidden,
+  .n-button,
+  .n-modal-mask,
+  .n-modal-container,
+  .n-data-table-th__sorter {
+    display: none !important;
+  }
+
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  .nd-print-sheet {
+    display: block !important;
+    width: 210mm;
+    min-height: 297mm;
+    margin: 0 auto;
+    padding: 12mm;
+    background: #fff;
+    color: #000;
+    box-shadow: none !important;
+  }
+
+  .nd-print-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .nd-print-table th,
+  .nd-print-table td {
+    border: 1px solid #111;
+    padding: 6px;
+    font-size: 12px;
+  }
+}

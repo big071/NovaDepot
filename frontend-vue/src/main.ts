@@ -4,6 +4,7 @@ import { createDiscreteApi } from "naive-ui";
 import App from "./App.vue";
 import router from "./router";
 import "./styles/main.css";
+import "./styles/print.css";
 import { useThemeStore } from "./stores/theme";
 
 const app = createApp(App);

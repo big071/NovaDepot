@@ -53,6 +53,26 @@ EXECUTE reset_rule_configs;
 DEALLOCATE PREPARE reset_rule_configs;
 DELETE FROM audit_logs WHERE id BETWEEN 300000 AND 399999;
 DELETE FROM inventory_transactions WHERE tenant_id = 1 AND biz_type = 'STOCKTAKE_ADJUST';
+DELETE FROM inventory_transactions WHERE tenant_id = 1 AND biz_type = 'INVENTORY_IMPORT';
+DELETE FROM inventory WHERE tenant_id = 1 AND product_id IN (
+  SELECT id FROM products WHERE tenant_id = 1 AND product_code LIKE 'SKU-E2E-S4-%'
+);
+DELETE FROM products WHERE tenant_id = 1 AND product_code LIKE 'SKU-E2E-S4-%';
+DELETE FROM partners WHERE tenant_id = 1 AND partner_code LIKE 'PT-E2E-S4-%';
+DELETE FROM import_error_reports WHERE tenant_id = 1 AND module IN ('PRODUCT_IMPORT','INVENTORY_IMPORT','PARTNER_IMPORT');
+SET @stmt = (
+  SELECT IF(
+    COUNT(*) = 1,
+    'DELETE FROM backup_records WHERE tenant_id = 1 AND (backup_no LIKE ''BKP-%'' OR id >= 1000000000000000000)',
+    'SELECT 1'
+  )
+  FROM information_schema.tables
+  WHERE table_schema = DATABASE()
+    AND table_name = 'backup_records'
+);
+PREPARE reset_backup_records FROM @stmt;
+EXECUTE reset_backup_records;
+DEALLOCATE PREPARE reset_backup_records;
 
 SET @stmt = (
   SELECT IF(

@@ -51,6 +51,15 @@ public class InventoryController {
                 .body(service.exportCsv());
     }
 
+    @GetMapping(value = "/import/template", produces = "text/csv;charset=UTF-8")
+    @RequirePermission("INVENTORY_TEMPLATE_EXPORT")
+    public ResponseEntity<String> exportImportTemplate() {
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("text/csv;charset=UTF-8"))
+                .header("Content-Disposition", "attachment; filename=inventory-import-template.csv")
+                .body(service.importTemplateCsv());
+    }
+
     @GetMapping("/export/fields")
     @RequirePermission("INVENTORY_EXPORT")
     public ApiResponse<List<String>> exportFields() {
@@ -61,5 +70,14 @@ public class InventoryController {
     @RequirePermission("INVENTORY_IMPORT")
     public ApiResponse<java.util.Map<String, Object>> importCsv(@RequestBody String csvContent) {
         return ApiResponse.success(service.importCsv(csvContent), MDC.get("traceId"));
+    }
+
+    @GetMapping(value = "/import/errors/{reportId}", produces = "text/csv;charset=UTF-8")
+    @RequirePermission("IMPORT_ERROR_REPORT_READ")
+    public ResponseEntity<String> importErrors(@org.springframework.web.bind.annotation.PathVariable String reportId) {
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("text/csv;charset=UTF-8"))
+                .header("Content-Disposition", "attachment; filename=inventory-import-errors-" + reportId + ".csv")
+                .body(service.importErrorReport(reportId));
     }
 }

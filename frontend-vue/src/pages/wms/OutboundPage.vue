@@ -1,11 +1,11 @@
-<template>
+﻿<template>
   <section class="space-y-4">
     <header class="nd-hero">
       <div class="nd-hero-header">
         <div>
           <p class="text-xs uppercase tracking-[0.14em] text-text-secondary">WMS</p>
           <h1 class="nd-page-title">出库单闭环管理</h1>
-          <p class="nd-page-subtitle">支持手工出库和销售来源出库草稿，发运时扣减库存。</p>
+          <p class="nd-page-subtitle">Manual outbound and sales-sourced outbound drafts with shipping.</p>
         </div>
         <div class="flex gap-2">
           <n-button class="nd-soft-focus" :loading="loading" @click="loadList">刷新</n-button>
@@ -18,35 +18,37 @@
     <n-alert v-else-if="successText" type="success" :show-icon="false">{{ successText }}</n-alert>
 
     <article class="nd-table-shell">
-      <div class="nd-table-head"><h3 class="nd-section-title">出库单列表</h3></div>
+      <div class="nd-table-head"><h3 class="nd-section-title">Outbound List</h3></div>
       <div class="nd-table-body">
         <n-data-table :columns="columns" :data="rows" :loading="loading" :bordered="false" />
       </div>
     </article>
 
-    <n-modal v-model:show="createVisible" preset="card" title="新建出库单" class="max-w-xl">
+    <n-modal v-model:show="createVisible" preset="card" title="New Outbound" class="max-w-xl">
       <div class="space-y-3">
-        <n-select v-model:value="createForm.warehouseId" :options="warehouseOptions" placeholder="选择仓库" @update:value="onWarehouseChange" />
-        <n-input-number v-model:value="createForm.customerId" :show-button="false" placeholder="客户ID（可选）" />
-        <n-select v-model:value="createForm.productId" :options="productOptions" placeholder="选择商品" />
-        <n-select v-model:value="createForm.locationId" :options="locationOptions" placeholder="选择库位" />
-        <n-input-number v-model:value="createForm.qty" :show-button="false" placeholder="数量" />
+        <n-select v-model:value="createForm.warehouseId" :options="warehouseOptions" placeholder="閫夋嫨浠撳簱" @update:value="onWarehouseChange" />
+        <n-input-number v-model:value="createForm.customerId" :show-button="false" placeholder="瀹㈡埛ID锛堝彲閫夛級" />
+        <n-select v-model:value="createForm.productId" :options="productOptions" placeholder="閫夋嫨鍟嗗搧" />
+        <n-select v-model:value="createForm.locationId" :options="locationOptions" placeholder="閫夋嫨搴撲綅" />
+        <n-input-number v-model:value="createForm.qty" :show-button="false" placeholder="鏁伴噺" />
       </div>
       <template #footer>
         <div class="flex justify-end gap-2">
-          <n-button @click="createVisible = false">取消</n-button>
-          <n-button type="primary" :loading="submitting" @click="onCreate">保存草稿</n-button>
+          <n-button @click="createVisible = false">鍙栨秷</n-button>
+          <n-button type="primary" :loading="submitting" @click="onCreate">淇濆瓨鑽夌</n-button>
         </div>
       </template>
     </n-modal>
 
-    <n-modal v-model:show="detailVisible" preset="card" title="出库单详情" class="max-w-5xl">
+    <n-modal v-model:show="detailVisible" preset="card" title="Outbound Detail" class="max-w-5xl">
       <div class="space-y-3">
         <n-descriptions bordered :column="3" size="small" label-placement="left" v-if="detail.order">
-          <n-descriptions-item label="单号">{{ detail.order.outboundNo }}</n-descriptions-item>
-          <n-descriptions-item label="状态">{{ statusText(detail.order.status) }}</n-descriptions-item>
-          <n-descriptions-item label="去向">{{ sourceText(detail.order) }}</n-descriptions-item>
+          <n-descriptions-item label="鍗曞彿">{{ detail.order.outboundNo }}</n-descriptions-item>
+          <n-descriptions-item label="Status">{{ statusText(detail.order.status) }}</n-descriptions-item>
+          <n-descriptions-item label="鍘诲悜">{{ sourceText(detail.order) }}</n-descriptions-item>
         </n-descriptions>
+        <div class="nd-print-hidden flex justify-end gap-2"><n-button v-if="authStore.hasPermission('OUTBOUND_PRINT')" class="nd-soft-focus" @click="printCurrent">打印出库单</n-button><n-button v-if="authStore.hasPermission('PICKING_PRINT')" class="nd-soft-focus" @click="printCurrent">打印拣货单</n-button></div>
+        <div class="nd-print-sheet"><h2>出库/拣货单</h2><p>单号：{{ detail.order?.outboundNo }}</p><p>去向：{{ sourceText(detail.order) }}</p><table class="nd-print-table"><tbody><tr v-for="item in sortedPrintItems" :key="item.id"><td>□</td><td>{{ item.lineNo }}</td><td>{{ item.productId }}</td><td>{{ item.locationId }}</td><td>{{ item.planQty }}</td><td>{{ item.pickedQty }}</td></tr></tbody></table><p>仓库签字：________  拣货人签字：________</p></div>
         <n-data-table :columns="timelineColumns" :data="detail.timeline" :bordered="false" size="small" />
         <n-data-table :columns="itemColumns" :data="detail.items" :bordered="false" size="small" />
       </div>
@@ -87,13 +89,14 @@ const createForm = reactive({
 const warehouseOptions = computed(() => warehouses.value.map((v) => ({ label: `${v.warehouseCode} ${v.warehouseName}`, value: v.id })));
 const productOptions = computed(() => products.value.map((v) => ({ label: `${v.productCode} ${v.productName}`, value: v.id })));
 const locationOptions = computed(() => locations.value.map((v) => ({ label: `${v.locationCode} ${v.locationName}`, value: v.id })));
+const sortedPrintItems = computed(() => [...detail.value.items].sort((a, b) => String(a.locationId).localeCompare(String(b.locationId))));
 
 const columns: DataTableColumns<OutboundOrder> = [
-  { title: "单号", key: "outboundNo", minWidth: 180 },
-  { title: "去向", key: "source", minWidth: 160, render: (row) => sourceText(row) },
-  { title: "状态", key: "status", width: 120, render: (row) => h(NTag, { type: statusType(row.status), bordered: false }, { default: () => statusText(row.status) }) },
+  { title: "鍗曞彿", key: "outboundNo", minWidth: 180 },
+  { title: "鍘诲悜", key: "source", minWidth: 160, render: (row) => sourceText(row) },
+  { title: "Status", key: "status", width: 120, render: (row) => h(NTag, { type: statusType(row.status), bordered: false }, { default: () => statusText(row.status) }) },
   {
-    title: "操作",
+    title: "鎿嶄綔",
     key: "actions",
     width: 560,
     render: (row) =>
@@ -110,20 +113,20 @@ const columns: DataTableColumns<OutboundOrder> = [
 ];
 
 const itemColumns: DataTableColumns<OutboundOrderItem> = [
-  { title: "行号", key: "lineNo" },
-  { title: "商品ID", key: "productId" },
-  { title: "库位ID", key: "locationId" },
-  { title: "计划数量", key: "planQty" },
-  { title: "拣货数量", key: "pickedQty" },
-  { title: "发运数量", key: "shippedQty" }
+  { title: "琛屽彿", key: "lineNo" },
+  { title: "鍟嗗搧ID", key: "productId" },
+  { title: "搴撲綅ID", key: "locationId" },
+  { title: "璁″垝鏁伴噺", key: "planQty" },
+  { title: "鎷ｈ揣鏁伴噺", key: "pickedQty" },
+  { title: "鍙戣繍鏁伴噺", key: "shippedQty" }
 ];
 
 const timelineColumns: DataTableColumns<OrderTimelineItem> = [
-  { title: "时间", key: "occurredAt", width: 180 },
-  { title: "操作人", key: "operatorName", width: 120 },
-  { title: "动作", key: "actionLabel", width: 140 },
-  { title: "状态变化", key: "status", render: (row) => `${row.statusFrom || "-"} -> ${row.statusTo || "-"}` },
-  { title: "备注", key: "note" }
+  { title: "鏃堕棿", key: "occurredAt", width: 180 },
+  { title: "Operator", key: "operatorName", width: 120 },
+  { title: "鍔ㄤ綔", key: "actionLabel", width: 140 },
+  { title: "Status Change", key: "status", render: (row) => `${row.statusFrom || "-"} -> ${row.statusTo || "-"}` },
+  { title: "澶囨敞", key: "note" }
 ];
 
 function actionBtn(label: string, onClick: () => void, enabled: boolean, rowId: string, primary = false) {
@@ -138,7 +141,7 @@ function statusType(status: string) {
 }
 
 function statusText(status: string) {
-  return ({ DRAFT: "草稿", SUBMITTED: "待审核", APPROVED: "已审核", REJECTED: "已驳回", CANCELED: "已作废", SHIPPED: "已发运" } as Record<string, string>)[status] || status;
+  return ({ DRAFT: "DRAFT", SUBMITTED: "SUBMITTED", APPROVED: "APPROVED", REJECTED: "REJECTED", CANCELED: "CANCELED", SHIPPED: "SHIPPED" } as Record<string, string>)[status] || status;
 }
 
 function sourceText(row: OutboundOrder) {
@@ -166,7 +169,7 @@ async function loadList() {
   try {
     rows.value = await wmsApi.listOutboundOrders({ force: true });
   } catch (e) {
-    errorText.value = e instanceof Error ? e.message : "出库单加载失败";
+    errorText.value = e instanceof Error ? e.message : "Outbound order loading failed";
   } finally {
     loading.value = false;
   }
@@ -174,7 +177,7 @@ async function loadList() {
 
 async function onCreate() {
   if (!createForm.warehouseId || !createForm.productId || !createForm.locationId || Number(createForm.qty) <= 0) {
-    ui.warning("请补全仓库、商品、库位与数量");
+    ui.warning("璇疯ˉ鍏ㄤ粨搴撱€佸晢鍝併€佸簱浣嶄笌鏁伴噺");
     return;
   }
   submitting.value = true;
@@ -185,10 +188,10 @@ async function onCreate() {
       items: [{ productId: createForm.productId, locationId: createForm.locationId, qty: Number(createForm.qty) }]
     });
     createVisible.value = false;
-    successText.value = "出库草稿已创建";
+    successText.value = "Outbound draft created";
     await loadList();
   } catch (e) {
-    errorText.value = e instanceof Error ? e.message : "创建失败";
+    errorText.value = e instanceof Error ? e.message : "鍒涘缓澶辫触";
   } finally {
     submitting.value = false;
   }
@@ -199,8 +202,12 @@ async function openDetail(id: string) {
   detailVisible.value = true;
 }
 
+function printCurrent() {
+  window.print();
+}
+
 function askNote(action: string) {
-  return window.prompt(`${action}备注（可留空）：`) || "";
+  return window.prompt(`${action}澶囨敞锛堝彲鐣欑┖锛夛細`) || "";
 }
 
 async function runAction(action: "submit" | "withdraw" | "approve" | "reject" | "cancel" | "ship", row: OutboundOrder) {
@@ -213,10 +220,10 @@ async function runAction(action: "submit" | "withdraw" | "approve" | "reject" | 
     if (action === "reject") await wmsApi.rejectOutboundOrder(row.id, note);
     if (action === "cancel") await wmsApi.cancelOutboundOrder(row.id, note);
     if (action === "ship") await wmsApi.shipOutboundOrder(row.id, note);
-    successText.value = "操作成功";
+    successText.value = "鎿嶄綔鎴愬姛";
     await loadList();
   } catch (e) {
-    errorText.value = e instanceof Error ? e.message : "操作失败";
+    errorText.value = e instanceof Error ? e.message : "鎿嶄綔澶辫触";
   } finally {
     actionLoading.value = "";
   }

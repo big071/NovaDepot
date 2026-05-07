@@ -21,6 +21,9 @@
 | 75 | [v1.0 演示说明](75-v1-demo-walkthrough.md) | 5 分钟 / 15 分钟演示指导 |
 | 76 | [v1.1 Sprint Plan](76-v1.1-sprint-plan.md) | v1.1 四个 Sprint 拆分与 Sprint 1 实施计划 |
 | 84 | [v1.1 Sprint 3 Finance + Stocktake Plan](84-v1.1-sprint3-finance-stocktake-plan.md) | v1.1 Sprint 3 轻量台账与库存盘点计划 |
+| 85 | [v1.1 Sprint 4 Operational Closure Plan](85-v1.1-sprint4-operational-closure-plan.md) | v1.1 Sprint 4 CSV 导入、打印、备份、tenant_id 检查与验收 |
+| 86 | [v1.1 Operational Guides](86-v1.1-operational-guides.md) | v1.1 CSV 导入、打印、备份和 tenant_id 预留说明 |
+| 87 | [v1.1 Final Acceptance Checklist](87-v1.1-final-acceptance-checklist.md) | v1.1 最终验收清单 |
 
 ---
 
