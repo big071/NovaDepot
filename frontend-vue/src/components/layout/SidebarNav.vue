@@ -1,23 +1,20 @@
 <template>
-  <aside class="sticky top-0 hidden h-screen w-64 shrink-0 overflow-y-auto border-r border-border bg-surface/85 px-3 py-4 backdrop-blur lg:block">
+  <aside
+    class="sticky top-0 hidden h-screen w-64 shrink-0 overflow-y-auto border-r border-border bg-surface/85 px-3 py-4 backdrop-blur lg:block">
     <div class="mb-6 rounded-xl border border-border/80 bg-bg/60 px-3 py-3">
       <p class="text-xs uppercase tracking-[0.2em] text-text-secondary">NovaDepot</p>
       <h1 class="mt-1 text-lg font-semibold tracking-tight">{{ authStore.roleNameZh }}导航</h1>
     </div>
     <nav class="space-y-1.5">
-      <RouterLink
-        v-for="item in navItems"
-        :key="item.path"
-        :to="item.path"
+      <RouterLink v-for="item in navItems" :key="item.path" :to="item.path"
         class="group flex items-center justify-between rounded-xl border border-transparent px-3 py-2.5 text-sm transition-all"
-        :class="
-          route.path === item.path
-            ? 'border-primary/30 bg-primary/10 text-primary shadow-card'
-            : 'text-text-secondary hover:-translate-y-0.5 hover:border-border hover:bg-bg hover:text-text-primary'
-        "
-      >
+        :class="route.path === item.path
+          ? 'border-primary/30 bg-primary/10 text-primary shadow-card'
+          : 'text-text-secondary hover:-translate-y-0.5 hover:border-border hover:bg-bg hover:text-text-primary'
+          ">
         <span>{{ item.label }}</span>
-        <span class="h-2 w-2 rounded-full transition" :class="route.path === item.path ? 'bg-primary' : 'bg-transparent group-hover:bg-info/60'" />
+        <span class="h-2 w-2 rounded-full transition"
+          :class="route.path === item.path ? 'bg-primary' : 'bg-transparent group-hover:bg-info/60'" />
       </RouterLink>
     </nav>
   </aside>
@@ -46,6 +43,7 @@ const roleMenuMap: Record<string, Array<{ label: string; path: string; permissio
     { label: "销售管理", path: "/erp/sales", permission: "SALES_READ" },
     { label: "应收应付", path: "/erp/finance", permission: "FINANCE_PAYABLE_READ" },
     { label: "AI 助手", path: "/ai/enterprise", permission: "AI_CHAT" },
+    { label: "AI 用量日志", path: "/ai/usage-logs", permission: "AI_USAGE_LOG_VIEW" },
     { label: "Agent 中心", path: "/agent/center", permission: "AGENT_TASK_READ" },
     { label: "知识维护", path: "/cs/knowledge", permission: "KNOWLEDGE_READ" },
     { label: "用户管理", path: "/system/users", permission: "USER_READ" },

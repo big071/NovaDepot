@@ -6,11 +6,13 @@ import com.novadepot.backend.common.utils.NoGenerator;
 import com.novadepot.backend.model.entity.AIConversationEntity;
 import com.novadepot.backend.model.entity.AIMessageEntity;
 import com.novadepot.backend.model.entity.AIPromptTemplateEntity;
+import com.novadepot.backend.model.entity.AiUsageLogEntity;
 import com.novadepot.backend.modules.ai.provider.AiProvider;
 import com.novadepot.backend.modules.knowledge.KnowledgeService;
 import com.novadepot.backend.repository.AIConversationMapper;
 import com.novadepot.backend.repository.AIMessageMapper;
 import com.novadepot.backend.repository.AIPromptTemplateMapper;
+import com.novadepot.backend.repository.AiUsageLogMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,6 +35,7 @@ public class AiService {
     private final AIMessageMapper messageMapper;
     private final AIPromptTemplateMapper promptTemplateMapper;
     private final KnowledgeService knowledgeService;
+    private final AiUsageLogMapper usageLogMapper;
     private final String defaultProvider;
     private final boolean paidEnabled;
 
@@ -41,6 +44,7 @@ public class AiService {
                      AIMessageMapper messageMapper,
                      AIPromptTemplateMapper promptTemplateMapper,
                      KnowledgeService knowledgeService,
+                     AiUsageLogMapper usageLogMapper,
                      @Value("${app.ai.provider:rule}") String defaultProvider,
                      @Value("${app.ai.paid-enabled:false}") boolean paidEnabled) {
         this.providers = providers;
@@ -48,6 +52,7 @@ public class AiService {
         this.messageMapper = messageMapper;
         this.promptTemplateMapper = promptTemplateMapper;
         this.knowledgeService = knowledgeService;
+        this.usageLogMapper = usageLogMapper;
         this.defaultProvider = defaultProvider;
         this.paidEnabled = paidEnabled;
     }
@@ -81,8 +86,15 @@ public class AiService {
         } catch (Exception ex) {
             log.warn("AI provider failed, provider={}, scene={}, reason={}", provider.providerName(), scene, ex.getMessage());
             fallbackFrom = provider.providerName();
-            providerResp = fallbackToMock(scene, userMessage, context, ex.getMessage());
-            provider = resolveProvider("mock", scene);
+            saveDegradationUsageLog(context, scene, fallbackFrom, started, ex.getMessage());
+            try {
+                provider = resolveProvider("rule", scene);
+                providerResp = provider.chat(scene, userMessage, context);
+            } catch (Exception ruleEx) {
+                log.warn("AI rule fallback failed, scene={}, reason={}", scene, ruleEx.getMessage());
+                providerResp = fallbackToMock(scene, userMessage, context, ruleEx.getMessage());
+                provider = resolveProvider("mock", scene);
+            }
         }
         int latencyMs = (int) (System.currentTimeMillis() - started);
 
@@ -116,6 +128,9 @@ public class AiService {
         }
         if (providerResp.containsKey("suggestions")) {
             result.put("suggestions", providerResp.get("suggestions"));
+        }
+        if (providerResp.containsKey("usage")) {
+            result.put("usage", providerResp.get("usage"));
         }
         result.put("knowledgeRefs", knowledgeRefs);
         result.put("knowledgeHit", !knowledgeRefs.isEmpty());
@@ -292,6 +307,47 @@ public class AiService {
         messageMapper.insert(message);
     }
 
+    private void saveDegradationUsageLog(Map<String, Object> context,
+                                         String scene,
+                                         String providerName,
+                                         long started,
+                                         String reason) {
+        try {
+            AiUsageLogEntity usage = new AiUsageLogEntity();
+            usage.setTenantId(RequestContext.tenantId());
+            Object conversationId = context.get("conversationId");
+            if (conversationId instanceof Long id) {
+                usage.setConversationId(id);
+            }
+            usage.setProvider(providerName);
+            usage.setModel(providerName);
+            usage.setScene(scene);
+            usage.setRole("user");
+            usage.setPromptTokens(0);
+            usage.setCompletionTokens(0);
+            usage.setTotalTokens(0);
+            usage.setLatencyMs((int) (System.currentTimeMillis() - started));
+            usage.setSuccess(0);
+            usage.setErrorCode("AI_DEGRADED");
+            usage.setErrorMessage(truncate(reason, 512));
+            usage.setCostEstimate(BigDecimal.ZERO);
+            Object userId = context.get("userId");
+            if (userId instanceof Long id) {
+                usage.setCreatedBy(id);
+            }
+            usageLogMapper.insert(usage);
+        } catch (Exception ex) {
+            log.warn("Failed to save AI degradation usage log: {}", ex.getMessage());
+        }
+    }
+
+    private String truncate(String text, int maxLen) {
+        if (text == null) {
+            return null;
+        }
+        return text.length() <= maxLen ? text : text.substring(0, maxLen);
+    }
+
     private BigDecimal toBigDecimal(Object value) {
         if (value == null) {
             return null;
@@ -307,6 +363,32 @@ public class AiService {
         } catch (Exception ignored) {
             return null;
         }
+    }
+
+    public List<Map<String, Object>> usageLogs(Long conversationId, int limit) {
+        List<AiUsageLogEntity> list = usageLogMapper.selectList(new LambdaQueryWrapper<AiUsageLogEntity>()
+                .eq(conversationId != null, AiUsageLogEntity::getConversationId, conversationId)
+                .eq(AiUsageLogEntity::getTenantId, RequestContext.tenantId())
+                .orderByDesc(AiUsageLogEntity::getId)
+                .last("limit " + Math.min(limit, 200)));
+        return list.stream().map(log -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", log.getId());
+            m.put("conversationId", log.getConversationId());
+            m.put("provider", log.getProvider());
+            m.put("model", log.getModel());
+            m.put("scene", log.getScene());
+            m.put("promptTokens", log.getPromptTokens());
+            m.put("completionTokens", log.getCompletionTokens());
+            m.put("totalTokens", log.getTotalTokens());
+            m.put("latencyMs", log.getLatencyMs());
+            m.put("success", log.getSuccess());
+            m.put("errorCode", log.getErrorCode());
+            m.put("errorMessage", log.getErrorMessage());
+            m.put("costEstimate", log.getCostEstimate());
+            m.put("createdAt", log.getCreatedAt());
+            return m;
+        }).collect(java.util.stream.Collectors.toList());
     }
 
     private Integer toInteger(Object value) {

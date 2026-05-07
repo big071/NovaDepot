@@ -97,3 +97,9 @@
 | 19 | [Vue 迁移 Phase1](19-vue-migration-phase1.md) | Vue 迁移第一阶段 |
 | 20 | [Vue 迁移 Phase2-5 执行](20-vue-migration-phase2-5-execution.md) | Vue 迁移执行记录 |
 | 23 | [Vue 切换与 Next 移除](23-vue-cutover-and-next-removal.md) | 前端切换完成确认 |
+# v1.2 DeepSeek Intelligence
+
+| 编号 | 文档 | 说明 |
+|---|---|---|
+| 93 | [v1.2 Sprint 1 Plan](93-v1.2-sprint1-plan.md) | DeepSeek 非流式基础接入、Provider 降级、用量日志和权限 |
+| 95 | [v1.2 Progress Tracker](95-v1.2-progress-tracker.md) | v1.2 Sprint 进度、限制和下一步 |

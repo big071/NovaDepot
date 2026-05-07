@@ -31,6 +31,7 @@ const router = createRouter({
         { path: "erp/sales", component: () => import("@/pages/erp/SalesPage.vue"), meta: { requiredPermission: "SALES_READ" } },
         { path: "erp/finance", component: () => import("@/pages/erp/FinancePage.vue"), meta: { requiredAnyPermissions: ["FINANCE_PAYABLE_READ", "FINANCE_RECEIVABLE_READ"] } },
         { path: "ai/enterprise", component: () => import("@/pages/ai/AiAssistantPage.vue"), meta: { requiredPermission: "AI_CHAT" } },
+        { path: "ai/usage-logs", component: () => import("@/pages/ai/AiUsageLogPage.vue"), meta: { requiredPermission: "AI_USAGE_LOG_VIEW" } },
         { path: "agent/center", component: () => import("@/pages/agent/AgentCenterPage.vue"), meta: { requiredPermission: "AGENT_TASK_READ" } },
         { path: "cs/workspace", component: () => import("@/pages/cs/CustomerServicePage.vue"), meta: { requiredPermission: "CS_SESSION_READ" } },
         { path: "cs/knowledge", component: () => import("@/pages/cs/KnowledgePage.vue"), meta: { requiredPermission: "KNOWLEDGE_READ" } },

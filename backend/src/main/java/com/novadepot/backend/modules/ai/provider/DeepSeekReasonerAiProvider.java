@@ -1,19 +1,40 @@
 package com.novadepot.backend.modules.ai.provider;
 
-import org.springframework.beans.factory.annotation.Value;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.novadepot.backend.common.config.AiProperties;
+import com.novadepot.backend.model.entity.AiUsageLogEntity;
+import com.novadepot.backend.repository.AiUsageLogMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
+import org.springframework.web.client.RestClient;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Component
 public class DeepSeekReasonerAiProvider implements AiProvider {
-    private final boolean enabled;
-    private final String model;
+    private static final Logger log = LoggerFactory.getLogger(DeepSeekReasonerAiProvider.class);
 
-    public DeepSeekReasonerAiProvider(@Value("${app.ai.deepseek.enabled:false}") boolean enabled,
-                                      @Value("${app.ai.deepseek.reasoner-model:deepseek-reasoner}") String model) {
-        this.enabled = enabled;
-        this.model = model;
+    private final AiProperties aiProperties;
+    private final RestClient deepseekRestClient;
+    private final AiUsageLogMapper usageLogMapper;
+    private final ObjectMapper objectMapper;
+
+    public DeepSeekReasonerAiProvider(AiProperties aiProperties,
+                                      RestClient deepseekRestClient,
+                                      AiUsageLogMapper usageLogMapper,
+                                      ObjectMapper objectMapper) {
+        this.aiProperties = aiProperties;
+        this.deepseekRestClient = deepseekRestClient;
+        this.usageLogMapper = usageLogMapper;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -23,15 +44,142 @@ public class DeepSeekReasonerAiProvider implements AiProvider {
 
     @Override
     public Map<String, Object> chat(String scene, String message, Map<String, Object> context) {
-        if (!enabled) {
+        if (!aiProperties.isDeepseekEnabled()) {
             throw new IllegalStateException("DeepSeek reasoner provider is disabled");
         }
+        if (!StringUtils.hasText(aiProperties.getDeepseekApiKey())) {
+            throw new IllegalStateException("DeepSeek API key is not configured");
+        }
+
+        List<Map<String, String>> messages = new ArrayList<>();
+        // system prompt
+        Map<String, String> systemMsg = new HashMap<>();
+        systemMsg.put("role", "system");
+        systemMsg.put("content", aiProperties.getSystemPrompt());
+        messages.add(systemMsg);
+
+        // user message
+        Map<String, String> userMsg = new HashMap<>();
+        userMsg.put("role", "user");
+        userMsg.put("content", message);
+        messages.add(userMsg);
+
+        Map<String, Object> body = Map.of(
+                "model", aiProperties.getDeepseekReasonerModel(),
+                "messages", messages,
+                "stream", false,
+                "max_tokens", 4096
+        );
+
+        long started = System.currentTimeMillis();
+        boolean success = true;
+        String errorCode = null;
+        String errorMessage = null;
+        String reply = "";
+        Integer promptTokens = 0;
+        Integer completionTokens = 0;
+        Integer totalTokens = 0;
+
+        try {
+            String responseJson = deepseekRestClient.post()
+                    .uri("/v1/chat/completions")
+                    .body(body)
+                    .retrieve()
+                    .body(String.class);
+
+            JsonNode root = objectMapper.readTree(responseJson);
+            // reasoner may have reasoning_content in addition to content
+            StringBuilder replyBuilder = new StringBuilder();
+            JsonNode choice = root.path("choices").path(0);
+            String reasoning = choice.path("message").path("reasoning_content").asText("");
+            String content = choice.path("message").path("content").asText("");
+            if (!reasoning.isEmpty()) {
+                replyBuilder.append("【推理过程】\n").append(reasoning).append("\n\n【结论】\n");
+            }
+            replyBuilder.append(content);
+            reply = replyBuilder.toString();
+
+            JsonNode usage = root.path("usage");
+            if (!usage.isMissingNode()) {
+                promptTokens = usage.path("prompt_tokens").asInt(0);
+                completionTokens = usage.path("completion_tokens").asInt(0);
+                totalTokens = usage.path("total_tokens").asInt(0);
+            }
+        } catch (Exception e) {
+            log.warn("DeepSeek reasoner API call failed: {}", e.getMessage());
+            throw new IllegalStateException("DeepSeek reasoner API call failed: " + truncate(e.getMessage(), 256), e);
+        }
+
+        int latencyMs = (int) (System.currentTimeMillis() - started);
+        BigDecimal costEstimate = estimateCost("deepseek-reasoner", promptTokens, completionTokens);
+
+        // persist usage log
+        saveUsageLog(context, scene, "user", promptTokens, completionTokens, totalTokens,
+                latencyMs, success, errorCode, errorMessage, costEstimate);
+
+        BigDecimal confidence = success ? BigDecimal.valueOf(0.90) : BigDecimal.valueOf(0.1);
+
         return Map.of(
-                "reply", "[DeepSeek-Reasoner 接入预留] 已接收复杂推理请求，可在启用真实 API 后返回正式结果。问题：" + message,
+                "reply", reply,
                 "scene", scene,
                 "provider", providerName(),
-                "confidence", 0.92,
-                "model", model
+                "confidence", confidence,
+                "model", aiProperties.getDeepseekReasonerModel(),
+                "tokens", totalTokens,
+                "usage", Map.of(
+                        "promptTokens", promptTokens,
+                        "completionTokens", completionTokens,
+                        "totalTokens", totalTokens,
+                        "latencyMs", latencyMs,
+                        "costEstimate", costEstimate
+                )
         );
+    }
+
+    @SuppressWarnings("unchecked")
+    private void saveUsageLog(Map<String, Object> context, String scene, String role,
+                              int promptTokens, int completionTokens, int totalTokens,
+                              int latencyMs, boolean success, String errorCode,
+                              String errorMessage, BigDecimal costEstimate) {
+        try {
+            AiUsageLogEntity log = new AiUsageLogEntity();
+            log.setTenantId(context.containsKey("tenantId") ? (Long) context.get("tenantId") : 0L);
+            Object convId = context.get("conversationId");
+            if (convId instanceof Long lid) {
+                log.setConversationId(lid);
+            }
+            log.setProvider(providerName());
+            log.setModel(aiProperties.getDeepseekReasonerModel());
+            log.setScene(scene);
+            log.setRole(role);
+            log.setPromptTokens(promptTokens);
+            log.setCompletionTokens(completionTokens);
+            log.setTotalTokens(totalTokens);
+            log.setLatencyMs(latencyMs);
+            log.setSuccess(success ? 1 : 0);
+            log.setErrorCode(errorCode);
+            log.setErrorMessage(errorMessage);
+            log.setCostEstimate(costEstimate);
+            Object userId = context.get("userId");
+            if (userId instanceof Long uid) {
+                log.setCreatedBy(uid);
+            }
+            usageLogMapper.insert(log);
+        } catch (Exception e) {
+            log.warn("Failed to save AI usage log", e);
+        }
+    }
+
+    private BigDecimal estimateCost(String model, int promptTokens, int completionTokens) {
+        double inputPrice = model.contains("reasoner") ? 4.0 : 1.0;
+        double outputPrice = model.contains("reasoner") ? 16.0 : 2.0;
+        double cost = (promptTokens / 1_000_000.0) * inputPrice
+                + (completionTokens / 1_000_000.0) * outputPrice;
+        return BigDecimal.valueOf(cost).setScale(6, RoundingMode.HALF_UP);
+    }
+
+    private String truncate(String text, int maxLen) {
+        if (text == null) return null;
+        return text.length() <= maxLen ? text : text.substring(0, maxLen);
     }
 }

@@ -6,7 +6,8 @@
           <h2 class="nd-section-title">AI 会话</h2>
           <p class="nd-section-subtitle">共 {{ conversations.length }} 个会话</p>
         </div>
-        <n-button class="nd-soft-focus" size="small" :loading="loadingConversations" @click="loadConversations">刷新</n-button>
+        <n-button class="nd-soft-focus" size="small" :loading="loadingConversations"
+          @click="loadConversations">刷新</n-button>
       </div>
       <div class="nd-table-body space-y-2">
         <n-empty v-if="!loadingConversations && conversations.length === 0" description="暂无会话，可点击推荐问题快速开始。">
@@ -18,13 +19,9 @@
             </div>
           </template>
         </n-empty>
-        <button
-          v-for="item in conversations"
-          :key="item.conversationNo"
-          class="nd-chat-list-item"
+        <button v-for="item in conversations" :key="item.conversationNo" class="nd-chat-list-item"
           :class="activeConversationNo === item.conversationNo ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/40 hover:bg-bg'"
-          @click="selectConversation(item.conversationNo)"
-        >
+          @click="selectConversation(item.conversationNo)">
           <div class="flex items-center justify-between gap-2">
             <p class="font-medium">{{ item.conversationNo }}</p>
             <n-tag size="small" :bordered="false" type="info">{{ item.provider }}</n-tag>
@@ -38,7 +35,7 @@
       <header class="nd-table-head">
         <div>
           <h1 class="text-xl font-semibold tracking-tight">AI 助手工作台</h1>
-          <p class="text-sm text-text-secondary">免费方案优先：RuleProvider / MockProvider</p>
+          <p class="text-sm text-text-secondary">AI 智能助手 · DeepSeek 驱动</p>
         </div>
         <div class="flex items-center gap-2">
           <span class="nd-pill">会话：{{ activeConversationNo || "未选择" }}</span>
@@ -52,21 +49,25 @@
         <article class="mb-3 rounded-xl border border-border bg-bg/50 p-3 text-xs text-text-secondary">
           AI 建议依据说明：优先使用真实库存、库存流水、低库存阈值、单据与客服事实；若数据不足，会返回规则化建议与下一步动作。
         </article>
-        <article v-if="lastKnowledgeRefs.length || lastKnowledgeNotice" class="mb-3 rounded-xl border border-border bg-bg/50 p-3 text-xs text-text-secondary">
+        <article v-if="lastKnowledgeRefs.length || lastKnowledgeNotice"
+          class="mb-3 rounded-xl border border-border bg-bg/50 p-3 text-xs text-text-secondary">
           <p class="font-medium text-text-primary">知识引用来源</p>
           <div v-if="lastKnowledgeRefs.length" class="mt-2 flex flex-wrap gap-2">
-            <n-tag v-for="ref in lastKnowledgeRefs" :key="`${ref.type}-${ref.code || ref.title}`" :bordered="false" type="info">
+            <n-tag v-for="ref in lastKnowledgeRefs" :key="`${ref.type}-${ref.code || ref.title}`" :bordered="false"
+              type="info">
               {{ ref.type }}：{{ ref.title }} / {{ ref.scene || '通用' }}
             </n-tag>
           </div>
           <p v-else class="mt-1">{{ lastKnowledgeNotice }}</p>
         </article>
         <div class="mb-3 flex flex-wrap gap-2">
-          <n-button v-for="q in recommendedQuestions" :key="q" class="nd-soft-focus" size="small" @click="askRecommended(q)">
+          <n-button v-for="q in recommendedQuestions" :key="q" class="nd-soft-focus" size="small"
+            @click="askRecommended(q)">
             {{ q }}
           </n-button>
         </div>
-        <n-alert v-if="lastSuccessText" type="success" :show-icon="false" class="nd-state-alert mb-3">{{ lastSuccessText }}</n-alert>
+        <n-alert v-if="lastSuccessText" type="success" :show-icon="false" class="nd-state-alert mb-3">{{ lastSuccessText
+          }}</n-alert>
 
         <article v-if="taskRunInfo" class="mb-3 rounded-xl border border-border bg-bg/50 p-4">
           <div class="flex items-center justify-between gap-2">
@@ -78,7 +79,8 @@
           </div>
 
           <div class="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <article v-for="card in taskSummaryCards" :key="card.title" class="rounded-xl border border-border bg-surface p-3">
+            <article v-for="card in taskSummaryCards" :key="card.title"
+              class="rounded-xl border border-border bg-surface p-3">
               <p class="text-xs text-text-secondary">{{ card.title }}</p>
               <p class="mt-1 text-sm font-semibold text-text-primary">{{ card.value }}</p>
             </article>
@@ -101,7 +103,8 @@
 
           <article class="mt-3 rounded-xl border border-border bg-surface p-3">
             <p class="text-sm font-medium text-text-primary">结果明细</p>
-            <n-data-table class="mt-2" :columns="taskResultColumns" :data="taskResultRows" :bordered="false" :max-height="260" />
+            <n-data-table class="mt-2" :columns="taskResultColumns" :data="taskResultRows" :bordered="false"
+              :max-height="260" />
             <n-empty v-if="taskResultRows.length === 0" class="mt-2" description="当前任务暂无可视化明细，可查看执行详情。" />
           </article>
 
@@ -116,17 +119,15 @@
           <div v-else-if="activeMessages.length === 0" class="space-y-2 text-sm text-text-secondary">
             <p>当前会话暂无消息，可先使用推荐问题快速体验。</p>
             <div class="flex flex-wrap gap-2">
-              <n-button v-for="q in recommendedQuestions.slice(0, 3)" :key="`inline-${q}`" size="small" @click="askRecommended(q)">
+              <n-button v-for="q in recommendedQuestions.slice(0, 3)" :key="`inline-${q}`" size="small"
+                @click="askRecommended(q)">
                 {{ q }}
               </n-button>
             </div>
           </div>
-          <div
-            v-for="(item, index) in activeMessages"
-            :key="index"
+          <div v-for="(item, index) in activeMessages" :key="index"
             class="max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-6"
-            :class="item.role === 'user' ? 'ml-auto bg-primary text-white shadow-sm' : 'border border-border bg-surface text-text-primary'"
-          >
+            :class="item.role === 'user' ? 'ml-auto bg-primary text-white shadow-sm' : 'border border-border bg-surface text-text-primary'">
             <p>{{ item.content }}</p>
           </div>
         </div>
@@ -135,8 +136,10 @@
           <n-alert v-if="errorText" class="nd-state-alert" type="error" :show-icon="false">{{ errorText }}</n-alert>
           <div class="nd-chat-composer">
             <div class="flex gap-2">
-              <n-input class="nd-soft-focus" v-model:value="inputText" placeholder="输入问题并发送" @keyup.enter="sendMessage" />
-              <n-button class="nd-soft-focus" type="primary" :loading="sending" :disabled="!canSend" @click="sendMessage">发送</n-button>
+              <n-input class="nd-soft-focus" v-model:value="inputText" placeholder="输入问题并发送"
+                @keyup.enter="sendMessage" />
+              <n-button class="nd-soft-focus" type="primary" :loading="sending" :disabled="!canSend"
+                @click="sendMessage">发送</n-button>
             </div>
           </div>
         </div>
@@ -444,7 +447,7 @@ async function sendMessage() {
       scene: scene.value,
       message: normalizedMessage,
       conversationNo: activeConversationNo.value ?? undefined,
-      providerHint: "rule"
+      providerHint: "deepseek-chat"
     });
 
     activeConversationNo.value = resp.conversationNo;

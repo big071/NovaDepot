@@ -46,8 +46,13 @@ app:
       fail-max-attempts: ${APP_AUTH_LOGIN_FAIL_MAX_ATTEMPTS:5}
       lock-minutes: ${APP_AUTH_LOGIN_LOCK_MINUTES:15}
   ai:
-    provider: ${AI_PROVIDER:rule}
+    provider: ${AI_PROVIDER:deepseek-chat}
+    model: ${AI_MODEL:deepseek-chat}
     paid-enabled: ${AI_PAID_ENABLED:false}
+    system-prompt: ${AI_SYSTEM_PROMPT:你是 NovaDepot 智能仓库管理系统的 AI 助手。你的职责包括帮助用户管理库存、采购、销售、入库、出库、工单、产品信息和往来单位。请用专业、简洁的中文回答问题。如果你不确定答案，请诚实告知并建议用户查阅相关资料。}
+    connect-timeout: ${AI_CONNECT_TIMEOUT:5000}
+    read-timeout: ${AI_READ_TIMEOUT:30000}
+    max-input-chars: ${AI_MAX_INPUT_CHARS:4096}
     paid:
       base-url: ${AI_PAID_BASE_URL:}
       api-key: ${AI_PAID_API_KEY:}

@@ -2,6 +2,30 @@
 
 import type { KnowledgeRef } from "@/services/knowledge";
 
+export interface AiConfig {
+  defaultProvider: string;
+  deepseekEnabled: boolean;
+  deepseekBaseUrl: string;
+  deepseekChatModel: string;
+  deepseekReasonerModel: string;
+  deepseekApiKeyMasked: string;
+  paidEnabled: boolean;
+}
+
+export interface AiUsageLog {
+  id: number;
+  conversationId: number;
+  provider: string;
+  model: string;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  latencyMs: number;
+  success: boolean;
+  errorMessage: string;
+  createdAt: string;
+}
+
 export interface AiConversation {
   id: string;
   conversationNo: string;
@@ -52,6 +76,9 @@ export const aiApi = {
     scene: string;
     message: string;
     conversationNo?: string;
-    providerHint?: "rule" | "mock";
-  }) => api.post<AiChatReply>("/ai/chat", payload)
+    providerHint?: "rule" | "mock" | "deepseek-chat" | "deepseek-reasoner";
+  }) => api.post<AiChatReply>("/ai/chat", payload),
+  config: () => api.get<AiConfig>("/ai/config"),
+  usageLogs: (conversationId?: number, limit?: number) =>
+    api.get<AiUsageLog[]>("/ai/usage-logs", { conversationId: conversationId ?? undefined, limit: limit ?? 100 })
 };

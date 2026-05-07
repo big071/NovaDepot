@@ -52,6 +52,32 @@ public class RuleAiProvider implements AiProvider {
     public Map<String, Object> chat(String scene, String message, Map<String, Object> context) {
         String normalized = message == null ? "" : message.toLowerCase(Locale.ROOT);
 
+        if (hasAny(normalized, "\u4f4e\u5e93\u5b58", "\u5e93\u5b58\u4e0d\u8db3", "\u5e93\u5b58\u9884\u8b66")) {
+            return lowStockAnalysis(scene);
+        }
+        if (hasAny(normalized, "\u5e93\u5b58") && hasAny(normalized, "\u591a\u5c11", "\u67e5\u8be2", "\u603b\u91cf", "\u6982\u89c8", "\u60c5\u51b5", "\u600e\u4e48\u6837")) {
+            return inventoryOverview(scene);
+        }
+        if (hasAny(normalized, "\u8865\u8d27", "\u91c7\u8d2d\u5efa\u8bae", "\u8865\u4ed3")) {
+            return replenishSuggestion(scene);
+        }
+
+        if (hasAny(normalized, "低库存", "库存不足", "库存预警")) {
+            return lowStockAnalysis(scene);
+        }
+        if (hasAny(normalized, "库存") && hasAny(normalized, "多少", "查询", "总量", "概览", "情况", "怎么样")) {
+            return inventoryOverview(scene);
+        }
+        if (hasAny(normalized, "补货", "采购建议", "补仓")) {
+            return replenishSuggestion(scene);
+        }
+        if (hasAny(normalized, "异常", "波动", "突增", "突减")) {
+            return abnormalInventoryHint(scene);
+        }
+        if (hasAny(normalized, "今天", "日报", "今日总结")) {
+            return periodicReport(scene, 1, "日报");
+        }
+
         if (hasAny(normalized, "库存", "stock") && hasAny(normalized, "多少", "查询", "总量", "概览", "summary")) {
             return inventoryOverview(scene);
         }
