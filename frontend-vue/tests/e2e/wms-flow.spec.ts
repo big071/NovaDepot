@@ -3,7 +3,7 @@ import { goToPath, loginAsAdmin } from "./helpers";
 
 const API_BASE = process.env.E2E_API_BASE_URL || "http://127.0.0.1:18080/api/v1";
 
-async function apiLogin(request: import("@playwright/test").APIRequestContext, username: string, password = "123456") {
+async function apiLogin(request: import("@playwright/test").APIRequestContext, username: string, password = "pass123") {
   const resp = await request.post(`${API_BASE}/auth/login`, {
     data: { tenantCode: "default", username, password }
   });
@@ -15,7 +15,8 @@ async function apiLogin(request: import("@playwright/test").APIRequestContext, u
 }
 
 test("入库流转：审核并过账", async ({ page, request }) => {
-  const warehouseToken = await apiLogin(request, "warehouse_manager");
+  page.on("dialog", (dialog) => dialog.accept(""));
+  const warehouseToken = await apiLogin(request, "warehouse01");
 
   const createResp = await request.post(`${API_BASE}/inbound-orders`, {
     headers: { Authorization: `Bearer ${warehouseToken}` },
@@ -44,7 +45,7 @@ test("入库流转：审核并过账", async ({ page, request }) => {
   const row = page.locator("tr", { hasText: String(inboundNo) }).first();
   await expect(row).toBeVisible();
 
-  await row.getByRole("button", { name: "审核通过", exact: true }).click();
+  await row.getByRole("button", { name: "审核", exact: true }).click();
   await expect(page.locator("tr", { hasText: String(inboundNo) }).first()).toContainText(/APPROVED|已审核/);
 
   await row.getByRole("button", { name: "过账", exact: true }).click();
@@ -52,7 +53,8 @@ test("入库流转：审核并过账", async ({ page, request }) => {
 });
 
 test("出库流转：审核并发运", async ({ page, request }) => {
-  const warehouseToken = await apiLogin(request, "warehouse_manager");
+  page.on("dialog", (dialog) => dialog.accept(""));
+  const warehouseToken = await apiLogin(request, "warehouse01");
 
   const createResp = await request.post(`${API_BASE}/outbound-orders`, {
     headers: { Authorization: `Bearer ${warehouseToken}` },
@@ -81,7 +83,7 @@ test("出库流转：审核并发运", async ({ page, request }) => {
   const row = page.locator("tr", { hasText: String(outboundNo) }).first();
   await expect(row).toBeVisible();
 
-  await row.getByRole("button", { name: "审核通过", exact: true }).click();
+  await row.getByRole("button", { name: "审核", exact: true }).click();
   await expect(page.locator("tr", { hasText: String(outboundNo) }).first()).toContainText(/APPROVED|已审核/);
 
   await row.getByRole("button", { name: "发运", exact: true }).click();

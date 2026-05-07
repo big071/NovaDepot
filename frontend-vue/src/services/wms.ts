@@ -95,12 +95,53 @@ export interface InventoryTransaction {
   occurredAt?: string;
 }
 
+export interface ImportSummary {
+  reportId?: string | null;
+  totalRows: number;
+  successRows: number;
+  failedRows: number;
+  skippedRows: number;
+  errors: string[];
+}
+
+export interface StocktakeOrder {
+  id: string;
+  stocktakeNo: string;
+  status: string;
+  warehouseId: string;
+  scopeType?: string;
+  startedAt?: string;
+  finishedAt?: string;
+  diffCount?: number;
+  remark?: string;
+}
+
+export interface StocktakeItem {
+  id: string;
+  stocktakeOrderId: string;
+  lineNo: number;
+  productId: string;
+  locationId: string;
+  systemQty: number;
+  countedQty: number;
+  diffQty: number;
+  resultType: string;
+}
+
+export interface StocktakeDetail {
+  order: StocktakeOrder;
+  items: StocktakeItem[];
+}
+
 export interface InboundOrder {
   id: string;
   inboundNo: string;
   warehouseId: string;
   supplierId?: number;
   status: string;
+  sourceType?: string;
+  sourceOrderId?: string;
+  sourceOrderNo?: string;
   createdBy?: string;
   createdAt?: string;
 }
@@ -111,6 +152,9 @@ export interface OutboundOrder {
   warehouseId: string;
   customerId?: number;
   status: string;
+  sourceType?: string;
+  sourceOrderId?: string;
+  sourceOrderNo?: string;
   createdBy?: string;
   createdAt?: string;
 }
@@ -180,9 +224,9 @@ export const wmsApi = {
     invalidatePrefix("products");
     return result;
   },
-  exportProductImportTemplate: () => api.get<string>("/products/import/template"),
-  getProductImportErrorReport: (reportId: string) => api.get<string>(`/products/import/errors/${reportId}`),
-  importProducts: (csvContent: string) => api.post<Record<string, unknown>>("/products/import", csvContent),
+  exportProductImportTemplate: () => fetchRaw("/products/import/template"),
+  getProductImportErrorReport: (reportId: string) => fetchRaw(`/products/import/errors/${reportId}`),
+  importProducts: (csvContent: string) => api.post<ImportSummary>("/products/import", csvContent),
 
   listWarehouses: (options?: QueryOptions) =>
     withCache(getCacheKey("warehouses"), () => api.get<Warehouse[]>("/warehouses"), options, 30_000),
@@ -254,8 +298,22 @@ export const wmsApi = {
       options,
       15_000
     ),
-  importInventory: (csvContent: string) => api.post<Record<string, unknown>>("/inventory/import", csvContent),
+  exportInventoryImportTemplate: () => fetchRaw("/inventory/import/template"),
+  getInventoryImportErrorReport: (reportId: string) => fetchRaw(`/inventory/import/errors/${reportId}`),
+  importInventory: (csvContent: string) => api.post<ImportSummary>("/inventory/import", csvContent),
   inventoryExportFields: () => api.get<string[]>("/inventory/export/fields"),
+
+  listStocktakes: (query?: { status?: string }) => api.get<StocktakeOrder[]>("/stocktakes", query),
+  getStocktake: (id: string) => api.get<StocktakeDetail>(`/stocktakes/${id}`),
+  createStocktake: (payload: { warehouseId: string; remark?: string }) =>
+    api.post<{ id: string; stocktakeNo: string; status: string }>("/stocktakes", payload),
+  startStocktake: (id: string) => api.post<{ id: string; stocktakeNo: string; status: string }>(`/stocktakes/${id}/actions/start`),
+  updateStocktakeCount: (id: string, itemId: string, countedQty: number) =>
+    api.put<{ id: string; diffQty: number; resultType: string }>(`/stocktakes/${id}/items/${itemId}/count`, { countedQty }),
+  submitStocktakeReview: (id: string) =>
+    api.post<{ id: string; stocktakeNo: string; status: string }>(`/stocktakes/${id}/actions/submit-review`),
+  confirmStocktake: (id: string) =>
+    api.post<{ id: string; status: string; adjustedCount: number }>(`/stocktakes/${id}/actions/confirm`),
 
   listInboundOrders: (options?: QueryOptions) =>
     withCache(getCacheKey("inbound-orders"), () => api.get<InboundOrder[]>("/inbound-orders"), options, 20_000),
@@ -391,3 +449,15 @@ export const wmsApi = {
     return result;
   }
 };
+
+async function fetchRaw(path: string) {
+  const base = import.meta.env.VITE_API_BASE_URL ?? "/api/v1";
+  const token = localStorage.getItem("novadepot-token") ?? "";
+  const res = await fetch(`${base}${path}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!res.ok) {
+    throw new Error(`Download failed: ${res.status}`);
+  }
+  return res.text();
+}

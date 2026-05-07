@@ -50,7 +50,7 @@ try {
   Assert-DockerReady
 
   Write-Host "[data-quality] 1/5 auth and api readiness"
-  $loginBody = @{ tenantCode = "default"; username = "admin"; password = "123456" } | ConvertTo-Json
+$loginBody = @{ tenantCode = "default"; username = "admin"; password = "admin123" } | ConvertTo-Json
   $loginResp = Invoke-RestMethod -Method Post -Uri "http://localhost:18080/api/v1/auth/login" -ContentType "application/json" -Body $loginBody
   Assert-SuccessCode $loginResp "login"
   $token = $loginResp.data.accessToken
@@ -105,6 +105,259 @@ select
   $ticketInconsistent = [int](Query-Scalar "select count(*) from customer_service_tickets t left join customer_service_sessions s on s.id=t.session_id and s.tenant_id=t.tenant_id and s.deleted=0 where t.tenant_id=1 and t.deleted=0 and (s.id is null or t.status not in ('OPEN','PROCESSING','RESOLVED','CLOSED'));")
   if ($ticketInconsistent -gt 0) { throw "ticket inconsistent rows found: $ticketInconsistent" }
   Write-Host "ticket consistency passed"
+
+  Write-Host "[data-quality] sprint2 ERP/WMS link consistency"
+  $sprint2Inconsistent = [int](Query-Scalar @"
+select
+  (select count(*)
+     from inbound_orders io
+     left join purchase_orders po
+       on po.id = io.source_order_id
+      and po.tenant_id = io.tenant_id
+      and po.deleted = 0
+    where io.tenant_id = 1
+      and io.deleted = 0
+      and io.source_type = 'PURCHASE_ORDER'
+      and po.id is null) +
+  (select count(*)
+     from outbound_orders oo
+     left join sales_orders so
+       on so.id = oo.source_order_id
+      and so.tenant_id = oo.tenant_id
+      and so.deleted = 0
+    where oo.tenant_id = 1
+      and oo.deleted = 0
+      and oo.source_type = 'SALES_ORDER'
+      and so.id is null) +
+  (select count(*)
+     from inbound_order_items ii
+     join inbound_orders io
+       on io.id = ii.inbound_order_id
+      and io.tenant_id = ii.tenant_id
+      and io.deleted = 0
+     left join purchase_order_items pi
+       on pi.id = ii.source_order_item_id
+      and pi.tenant_id = ii.tenant_id
+      and pi.deleted = 0
+    where ii.tenant_id = 1
+      and ii.deleted = 0
+      and io.source_type = 'PURCHASE_ORDER'
+      and pi.id is null) +
+  (select count(*)
+     from outbound_order_items oi
+     join outbound_orders oo
+       on oo.id = oi.outbound_order_id
+      and oo.tenant_id = oi.tenant_id
+      and oo.deleted = 0
+     left join sales_order_items si
+       on si.id = oi.source_order_item_id
+      and si.tenant_id = oi.tenant_id
+      and si.deleted = 0
+    where oi.tenant_id = 1
+      and oi.deleted = 0
+      and oo.source_type = 'SALES_ORDER'
+      and si.id is null) +
+  (select count(*) from purchase_order_items where tenant_id = 1 and deleted = 0 and received_qty > order_qty) +
+  (select count(*) from sales_order_items where tenant_id = 1 and deleted = 0 and shipped_qty > order_qty) +
+  (select count(*)
+     from purchase_orders po
+    where po.tenant_id = 1
+      and po.deleted = 0
+      and po.status = 'FULLY_RECEIVED'
+      and exists (
+        select 1 from purchase_order_items pi
+         where pi.tenant_id = po.tenant_id
+           and pi.purchase_order_id = po.id
+           and pi.deleted = 0
+           and pi.received_qty < pi.order_qty
+      )) +
+  (select count(*)
+     from sales_orders so
+    where so.tenant_id = 1
+      and so.deleted = 0
+      and so.status = 'FULLY_SHIPPED'
+      and exists (
+        select 1 from sales_order_items si
+         where si.tenant_id = so.tenant_id
+           and si.sales_order_id = so.id
+           and si.deleted = 0
+           and si.shipped_qty < si.order_qty
+      ));
+"@)
+  if ($sprint2Inconsistent -gt 0) { throw "sprint2 ERP/WMS inconsistent rows found: $sprint2Inconsistent" }
+  Write-Host "sprint2 ERP/WMS link consistency passed"
+
+  Write-Host "[data-quality] sprint3 finance and stocktake consistency"
+  $sprint3Inconsistent = [int](Query-Scalar @"
+select
+  (select count(*)
+     from payables p
+     left join purchase_orders po
+       on po.id = p.source_order_id
+      and po.tenant_id = p.tenant_id
+      and po.deleted = 0
+    where p.tenant_id = 1
+      and p.deleted = 0
+      and (p.source_type <> 'PURCHASE_ORDER' or po.id is null)) +
+  (select count(*)
+     from receivables r
+     left join sales_orders so
+       on so.id = r.source_order_id
+      and so.tenant_id = r.tenant_id
+      and so.deleted = 0
+    where r.tenant_id = 1
+      and r.deleted = 0
+      and (r.source_type <> 'SALES_ORDER' or so.id is null)) +
+  (select count(*)
+     from payables
+    where tenant_id = 1
+      and deleted = 0
+      and (total_amount < 0 or paid_amount < 0 or balance_amount < 0 or paid_amount > total_amount
+        or status not in ('UNPAID','PARTIALLY_PAID','PAID','CANCELLED')
+        or (status <> 'CANCELLED' and balance_amount <> total_amount - paid_amount)
+        or (status <> 'CANCELLED' and paid_amount = 0 and balance_amount > 0 and status <> 'UNPAID')
+        or (status <> 'CANCELLED' and paid_amount > 0 and paid_amount < total_amount and status <> 'PARTIALLY_PAID')
+        or (status <> 'CANCELLED' and paid_amount = total_amount and status <> 'PAID'))) +
+  (select count(*)
+     from receivables
+    where tenant_id = 1
+      and deleted = 0
+      and (total_amount < 0 or received_amount < 0 or balance_amount < 0 or received_amount > total_amount
+        or status not in ('UNPAID','PARTIALLY_PAID','PAID','CANCELLED')
+        or (status <> 'CANCELLED' and balance_amount <> total_amount - received_amount)
+        or (status <> 'CANCELLED' and received_amount = 0 and balance_amount > 0 and status <> 'UNPAID')
+        or (status <> 'CANCELLED' and received_amount > 0 and received_amount < total_amount and status <> 'PARTIALLY_PAID')
+        or (status <> 'CANCELLED' and received_amount = total_amount and status <> 'PAID'))) +
+  (select count(*)
+     from payments pm
+    where pm.tenant_id = 1
+      and pm.deleted = 0
+      and (pm.amount <= 0
+        or pm.direction not in ('PAYABLE','RECEIVABLE')
+        or (pm.direction = 'PAYABLE' and not exists (
+          select 1 from payables p where p.tenant_id = pm.tenant_id and p.id = pm.ledger_id and p.deleted = 0
+        ))
+        or (pm.direction = 'RECEIVABLE' and not exists (
+          select 1 from receivables r where r.tenant_id = pm.tenant_id and r.id = pm.ledger_id and r.deleted = 0
+        )))) +
+  (select count(*)
+     from stocktake_order_items si
+     left join stocktake_orders so
+       on so.id = si.stocktake_order_id
+      and so.tenant_id = si.tenant_id
+      and so.deleted = 0
+    where si.tenant_id = 1
+      and si.deleted = 0
+      and so.id is null) +
+  (select count(*)
+     from stocktake_orders so
+    where so.tenant_id = 1
+      and so.deleted = 0
+      and so.status = 'COMPLETED'
+      and exists (
+        select 1
+          from stocktake_order_items si
+         where si.tenant_id = so.tenant_id
+           and si.stocktake_order_id = so.id
+           and si.deleted = 0
+           and si.diff_qty <> 0
+           and not exists (
+             select 1
+               from inventory_transactions it
+              where it.tenant_id = si.tenant_id
+                and it.biz_type = 'STOCKTAKE_ADJUST'
+                and it.biz_no = so.stocktake_no
+                and it.product_id = si.product_id
+                and it.location_id = si.location_id
+                and it.change_qty = si.diff_qty
+                and it.deleted = 0
+           )
+      )) +
+  (select count(*)
+     from inventory_transactions
+    where tenant_id = 1
+      and deleted = 0
+      and biz_type = 'STOCKTAKE_ADJUST'
+      and before_qty + change_qty <> after_qty) +
+  (select count(*)
+     from inventory
+    where tenant_id = 1
+      and deleted = 0
+      and available_qty < 0);
+"@)
+  if ($sprint3Inconsistent -gt 0) { throw "sprint3 finance/stocktake inconsistent rows found: $sprint3Inconsistent" }
+  Write-Host "sprint3 finance and stocktake consistency passed"
+
+  Write-Host "[data-quality] sprint4 import, backup and tenant reserve consistency"
+  $tenantMissing = [int](Query-Scalar @"
+select count(*)
+from information_schema.tables t
+where t.table_schema = database()
+  and t.table_type = 'BASE TABLE'
+  and t.table_name in (
+    'products','product_categories','product_units','warehouses','warehouse_locations','inventory','inventory_transactions',
+    'inbound_orders','inbound_order_items','outbound_orders','outbound_order_items','partners','purchase_orders',
+    'purchase_order_items','sales_orders','sales_order_items','payables','receivables','payments','stocktake_orders',
+    'stocktake_order_items','import_error_reports','backup_records','audit_logs','customer_service_sessions',
+    'customer_service_messages','customer_service_tickets','faq_knowledge','sop_knowledge','ai_conversations',
+    'ai_messages','agent_task_runs','notifications'
+  )
+  and not exists (
+    select 1 from information_schema.columns c
+    where c.table_schema = t.table_schema
+      and c.table_name = t.table_name
+      and c.column_name = 'tenant_id'
+  );
+"@)
+  if ($tenantMissing -gt 0) { throw "tenant_id missing business tables found: $tenantMissing" }
+
+  $sprint4Inconsistent = [int](Query-Scalar @"
+select
+  (select count(*)
+     from inventory_transactions
+    where tenant_id = 1
+      and deleted = 0
+      and biz_type = 'INVENTORY_IMPORT'
+      and before_qty + change_qty <> after_qty) +
+  (select count(*)
+     from import_error_reports
+    where tenant_id = 1
+      and deleted = 0
+      and module in ('PRODUCT_IMPORT','INVENTORY_IMPORT','PARTNER_IMPORT')
+      and (report_id is null or report_id = '' or content is null or content = '')) +
+  (select count(*)
+     from backup_records
+    where tenant_id = 1
+      and deleted = 0
+      and (status not in ('RUNNING','SUCCESS','FAILED')
+        or backup_no is null
+        or backup_no = ''
+        or (status = 'SUCCESS' and (file_size is null or file_size <= 0)))) +
+  (select count(*)
+     from products p
+    where p.tenant_id = 1
+      and p.deleted = 0
+      and exists (
+        select 1 from products d
+         where d.tenant_id = p.tenant_id
+           and d.product_code = p.product_code
+           and d.deleted = 0
+           and d.id <> p.id
+      )) +
+  (select count(*)
+     from partners p
+    where p.tenant_id = 1
+      and p.deleted = 0
+      and exists (
+        select 1 from partners d
+         where d.tenant_id = p.tenant_id
+           and d.partner_code = p.partner_code
+           and d.deleted = 0
+           and d.id <> p.id
+      ));
+"@)
+  if ($sprint4Inconsistent -gt 0) { throw "sprint4 import/backup inconsistent rows found: $sprint4Inconsistent" }
+  Write-Host "sprint4 import, backup and tenant reserve consistency passed"
 
   Write-Host "[data-quality] passed"
 } catch {

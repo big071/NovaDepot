@@ -14,12 +14,12 @@ INSERT INTO roles (id, tenant_id, role_code, role_name, data_scope, status, crea
 (1005,1,'DATA_VIEWER','LEGACY_TEXT','ALL','ACTIVE',NOW(3),NOW(3),0)
 ON DUPLICATE KEY UPDATE role_name=VALUES(role_name), data_scope=VALUES(data_scope), status=VALUES(status), deleted=0, updated_at=NOW(3);
 INSERT INTO users (id, tenant_id, username, password_hash, real_name, phone, email, status, force_password_change, failed_login_count, lock_until, pwd_updated_at, created_at, updated_at, deleted) VALUES
-(1,1,'admin','123456','LEGACY_TEXT','13800000001','admin@novadepot.local','ACTIVE',0,0,NULL,NOW(3),NOW(3),NOW(3),0),
-(2,1,'warehouse_manager','123456','LEGACY_TEXT','13800000002','warehouse_manager@novadepot.local','ACTIVE',0,0,NULL,NOW(3),NOW(3),NOW(3),0),
-(3,1,'operator','123456','LEGACY_TEXT','13800000003','operator@novadepot.local','ACTIVE',0,0,NULL,NOW(3),NOW(3),NOW(3),0),
-(4,1,'cs_agent','123456','LEGACY_TEXT','13800000004','cs_agent@novadepot.local','ACTIVE',0,0,NULL,NOW(3),NOW(3),NOW(3),0),
-(5,1,'viewer','123456','LEGACY_TEXT','13800000005','viewer@novadepot.local','ACTIVE',0,0,NULL,NOW(3),NOW(3),NOW(3),0)
-ON DUPLICATE KEY UPDATE real_name=VALUES(real_name), phone=VALUES(phone), email=VALUES(email), password_hash=VALUES(password_hash), status=VALUES(status), force_password_change=VALUES(force_password_change), failed_login_count=VALUES(failed_login_count), lock_until=VALUES(lock_until), pwd_updated_at=VALUES(pwd_updated_at), deleted=0, updated_at=NOW(3);
+(1,1,'admin','admin123','LEGACY_TEXT','13800000001','admin@novadepot.local','ACTIVE',0,0,NULL,NOW(3),NOW(3),NOW(3),0),
+(2,1,'warehouse01','pass123','LEGACY_TEXT','13800000002','warehouse01@novadepot.local','ACTIVE',0,0,NULL,NOW(3),NOW(3),NOW(3),0),
+(3,1,'operator','pass123','LEGACY_TEXT','13800000003','operator@novadepot.local','ACTIVE',0,0,NULL,NOW(3),NOW(3),NOW(3),0),
+(4,1,'cs01','pass123','LEGACY_TEXT','13800000004','cs01@novadepot.local','ACTIVE',0,0,NULL,NOW(3),NOW(3),NOW(3),0),
+(5,1,'observer01','pass123','LEGACY_TEXT','13800000005','observer01@novadepot.local','ACTIVE',0,0,NULL,NOW(3),NOW(3),NOW(3),0)
+ON DUPLICATE KEY UPDATE username=VALUES(username), real_name=VALUES(real_name), phone=VALUES(phone), email=VALUES(email), password_hash=VALUES(password_hash), status=VALUES(status), force_password_change=VALUES(force_password_change), failed_login_count=VALUES(failed_login_count), lock_until=VALUES(lock_until), pwd_updated_at=VALUES(pwd_updated_at), deleted=0, updated_at=NOW(3);
 INSERT INTO user_roles (id, tenant_id, user_id, role_id, created_at, updated_at, deleted) VALUES
 (2001,1,1,1001,NOW(3),NOW(3),0),
 (2002,1,2,1002,NOW(3),NOW(3),0),
@@ -27,6 +27,8 @@ INSERT INTO user_roles (id, tenant_id, user_id, role_id, created_at, updated_at,
 (2004,1,4,1004,NOW(3),NOW(3),0),
 (2005,1,5,1005,NOW(3),NOW(3),0)
 ON DUPLICATE KEY UPDATE deleted=0, updated_at=NOW(3);
+DELETE FROM user_roles WHERE tenant_id = 1 AND user_id IN (6,7,8);
+DELETE FROM users WHERE tenant_id = 1 AND username IN ('warehouse_ops','cs_ops','observer');
 INSERT INTO permissions (id, perm_code, perm_name, resource, action, status, created_at, updated_at, deleted) VALUES
 (3001,'USER_READ','LEGACY_TEXT','/api/v1/users','GET','ACTIVE',NOW(3),NOW(3),0),
 (3002,'USER_CREATE','LEGACY_TEXT','/api/v1/users','POST','ACTIVE',NOW(3),NOW(3),0),
@@ -91,26 +93,61 @@ INSERT INTO permissions (id, perm_code, perm_name, resource, action, status, cre
 (3061,'KNOWLEDGE_READ','知识库查看','/api/v1/knowledge','GET','ACTIVE',NOW(3),NOW(3),0),
 (3062,'KNOWLEDGE_DRAFT_WRITE','知识草稿维护','/api/v1/knowledge','POST/PUT','ACTIVE',NOW(3),NOW(3),0),
 (3063,'KNOWLEDGE_CONFIRM','知识确认启停','/api/v1/knowledge/{id}/confirm','POST','ACTIVE',NOW(3),NOW(3),0),
-(3064,'RULE_CONFIG_UPDATE','规则配置维护','/api/v1/knowledge/rules/{configKey}','PUT','ACTIVE',NOW(3),NOW(3),0)
+(3064,'RULE_CONFIG_UPDATE','规则配置维护','/api/v1/knowledge/rules/{configKey}','PUT','ACTIVE',NOW(3),NOW(3),0),
+(3065,'PARTNER_READ','往来单位查看','/api/v1/partners','GET','ACTIVE',NOW(3),NOW(3),0),
+(3066,'PARTNER_CREATE','往来单位创建','/api/v1/partners','POST','ACTIVE',NOW(3),NOW(3),0),
+(3067,'PARTNER_UPDATE','往来单位编辑','/api/v1/partners/{id}','PUT','ACTIVE',NOW(3),NOW(3),0),
+(3068,'PURCHASE_READ','采购单查看','/api/v1/purchase-orders','GET','ACTIVE',NOW(3),NOW(3),0),
+(3069,'PURCHASE_CREATE','采购单创建','/api/v1/purchase-orders','POST','ACTIVE',NOW(3),NOW(3),0),
+(3070,'PURCHASE_UPDATE','采购单编辑','/api/v1/purchase-orders/{id}','PUT','ACTIVE',NOW(3),NOW(3),0),
+(3071,'PURCHASE_CONFIRM','采购单确认','/api/v1/purchase-orders/{id}/actions/confirm','POST','ACTIVE',NOW(3),NOW(3),0),
+(3072,'PURCHASE_CANCEL','采购单取消','/api/v1/purchase-orders/{id}/actions/cancel','POST','ACTIVE',NOW(3),NOW(3),0),
+(3073,'SALES_READ','销售单查看','/api/v1/sales-orders','GET','ACTIVE',NOW(3),NOW(3),0),
+(3074,'SALES_CREATE','销售单创建','/api/v1/sales-orders','POST','ACTIVE',NOW(3),NOW(3),0),
+(3075,'SALES_UPDATE','销售单编辑','/api/v1/sales-orders/{id}','PUT','ACTIVE',NOW(3),NOW(3),0),
+(3076,'SALES_CONFIRM','销售单确认','/api/v1/sales-orders/{id}/actions/confirm','POST','ACTIVE',NOW(3),NOW(3),0),
+(3077,'SALES_CANCEL','销售单取消','/api/v1/sales-orders/{id}/actions/cancel','POST','ACTIVE',NOW(3),NOW(3),0),
+(3078,'PURCHASE_TO_INBOUND','采购单生成入库草稿','/api/v1/purchase-orders/{id}/actions/create-inbound-draft','POST','ACTIVE',NOW(3),NOW(3),0),
+(3079,'SALES_TO_OUTBOUND','销售单生成出库草稿','/api/v1/sales-orders/{id}/actions/create-outbound-draft','POST','ACTIVE',NOW(3),NOW(3),0),
+(3080,'FINANCE_PAYABLE_READ','应付台账查看','/api/v1/finance/payables','GET','ACTIVE',NOW(3),NOW(3),0),
+(3081,'FINANCE_RECEIVABLE_READ','应收台账查看','/api/v1/finance/receivables','GET','ACTIVE',NOW(3),NOW(3),0),
+(3082,'FINANCE_PAYMENT_REGISTER','付款登记','/api/v1/finance/payables/{id}/payments','POST','ACTIVE',NOW(3),NOW(3),0),
+(3083,'FINANCE_RECEIPT_REGISTER','收款登记','/api/v1/finance/receivables/{id}/receipts','POST','ACTIVE',NOW(3),NOW(3),0),
+(3084,'STOCKTAKE_READ','盘点单查看','/api/v1/stocktakes','GET','ACTIVE',NOW(3),NOW(3),0),
+(3085,'STOCKTAKE_CREATE','盘点单创建','/api/v1/stocktakes','POST','ACTIVE',NOW(3),NOW(3),0),
+(3086,'STOCKTAKE_COUNT','盘点实盘录入','/api/v1/stocktakes/{id}/items/{itemId}/count','PUT','ACTIVE',NOW(3),NOW(3),0),
+(3087,'STOCKTAKE_CONFIRM','盘点差异确认','/api/v1/stocktakes/{id}/actions/confirm','POST','ACTIVE',NOW(3),NOW(3),0),
+(3088,'INVENTORY_TEMPLATE_EXPORT','库存导入模板','/api/v1/inventory/import/template','GET','ACTIVE',NOW(3),NOW(3),0),
+(3089,'PARTNER_IMPORT','往来单位导入','/api/v1/partners/import','POST','ACTIVE',NOW(3),NOW(3),0),
+(3090,'PARTNER_TEMPLATE_EXPORT','往来单位导入模板','/api/v1/partners/import/template','GET','ACTIVE',NOW(3),NOW(3),0),
+(3091,'INBOUND_PRINT','入库单打印','/api/v1/inbound-orders/{id}/detail','PRINT','ACTIVE',NOW(3),NOW(3),0),
+(3092,'OUTBOUND_PRINT','出库单打印','/api/v1/outbound-orders/{id}/detail','PRINT','ACTIVE',NOW(3),NOW(3),0),
+(3093,'PICKING_PRINT','拣货单打印','/api/v1/outbound-orders/{id}/detail','PRINT','ACTIVE',NOW(3),NOW(3),0),
+(3094,'BACKUP_READ','备份记录查看','/api/v1/backups','GET','ACTIVE',NOW(3),NOW(3),0),
+(3095,'BACKUP_RUN','手动备份','/api/v1/backups/actions/run','POST','ACTIVE',NOW(3),NOW(3),0)
 ON DUPLICATE KEY UPDATE perm_name=VALUES(perm_name), resource=VALUES(resource), action=VALUES(action), status=VALUES(status), deleted=0, updated_at=NOW(3);
 INSERT INTO role_permissions (id, tenant_id, role_id, permission_id, created_at, updated_at, deleted)
 SELECT 400000 + p.id, 1, 1001, p.id, NOW(3), NOW(3), 0 FROM permissions p WHERE p.deleted=0
 ON DUPLICATE KEY UPDATE deleted=0, updated_at=NOW(3);
+DELETE rp FROM role_permissions rp
+JOIN permissions p ON p.id = rp.permission_id
+WHERE rp.role_id IN (1002,1003,1004,1005)
+  AND p.perm_code IN ('PARTNER_READ','PARTNER_CREATE','PARTNER_UPDATE','PARTNER_IMPORT','PARTNER_TEMPLATE_EXPORT','PURCHASE_READ','PURCHASE_CREATE','PURCHASE_UPDATE','PURCHASE_CONFIRM','PURCHASE_CANCEL','PURCHASE_TO_INBOUND','SALES_READ','SALES_CREATE','SALES_UPDATE','SALES_CONFIRM','SALES_CANCEL','SALES_TO_OUTBOUND','FINANCE_PAYABLE_READ','FINANCE_RECEIVABLE_READ','FINANCE_PAYMENT_REGISTER','FINANCE_RECEIPT_REGISTER','STOCKTAKE_READ','STOCKTAKE_CREATE','STOCKTAKE_COUNT','STOCKTAKE_CONFIRM','INVENTORY_TEMPLATE_EXPORT','INBOUND_PRINT','OUTBOUND_PRINT','PICKING_PRINT','BACKUP_READ','BACKUP_RUN');
 INSERT INTO role_permissions (id, tenant_id, role_id, permission_id, created_at, updated_at, deleted)
 SELECT 500000 + p.id, 1, 1002, p.id, NOW(3), NOW(3), 0 FROM permissions p
-WHERE p.perm_code IN ('PRODUCT_READ','PRODUCT_CREATE','PRODUCT_UPDATE','PRODUCT_EXPORT','PRODUCT_IMPORT','PRODUCT_TEMPLATE_EXPORT','IMPORT_ERROR_REPORT_READ','WAREHOUSE_READ','WAREHOUSE_CREATE','WAREHOUSE_UPDATE','LOCATION_READ','LOCATION_CREATE','LOCATION_UPDATE','INVENTORY_READ','INVENTORY_TXN_READ','INVENTORY_ALERT_READ','INVENTORY_EXPORT','INVENTORY_IMPORT','INBOUND_READ','INBOUND_CREATE','INBOUND_UPDATE','INBOUND_SUBMIT','INBOUND_WITHDRAW','INBOUND_CANCEL','INBOUND_UNAPPROVE','INBOUND_APPROVE','INBOUND_POST','OUTBOUND_READ','OUTBOUND_CREATE','OUTBOUND_UPDATE','OUTBOUND_SUBMIT','OUTBOUND_WITHDRAW','OUTBOUND_CANCEL','OUTBOUND_UNAPPROVE','OUTBOUND_APPROVE','OUTBOUND_SHIP','REPORT_DASHBOARD_READ','REPORT_INVENTORY_READ','USER_CHANGE_PASSWORD','USER_READ','USER_RESET_PASSWORD','AUDIT_READ','AGENT_TASK_READ','AGENT_TASK_EXECUTE','KNOWLEDGE_READ','KNOWLEDGE_DRAFT_WRITE','KNOWLEDGE_CONFIRM','RULE_CONFIG_UPDATE')
+WHERE p.perm_code IN ('PRODUCT_READ','PRODUCT_CREATE','PRODUCT_UPDATE','PRODUCT_EXPORT','PRODUCT_IMPORT','PRODUCT_TEMPLATE_EXPORT','IMPORT_ERROR_REPORT_READ','WAREHOUSE_READ','WAREHOUSE_CREATE','WAREHOUSE_UPDATE','LOCATION_READ','LOCATION_CREATE','LOCATION_UPDATE','INVENTORY_READ','INVENTORY_TXN_READ','INVENTORY_ALERT_READ','INVENTORY_EXPORT','INVENTORY_IMPORT','INVENTORY_TEMPLATE_EXPORT','INBOUND_READ','INBOUND_CREATE','INBOUND_UPDATE','INBOUND_SUBMIT','INBOUND_WITHDRAW','INBOUND_CANCEL','INBOUND_UNAPPROVE','INBOUND_APPROVE','INBOUND_POST','INBOUND_PRINT','OUTBOUND_READ','OUTBOUND_CREATE','OUTBOUND_UPDATE','OUTBOUND_SUBMIT','OUTBOUND_WITHDRAW','OUTBOUND_CANCEL','OUTBOUND_UNAPPROVE','OUTBOUND_APPROVE','OUTBOUND_SHIP','OUTBOUND_PRINT','PICKING_PRINT','REPORT_DASHBOARD_READ','REPORT_INVENTORY_READ','USER_CHANGE_PASSWORD','USER_READ','USER_RESET_PASSWORD','AUDIT_READ','BACKUP_READ','BACKUP_RUN','AGENT_TASK_READ','AGENT_TASK_EXECUTE','KNOWLEDGE_READ','KNOWLEDGE_DRAFT_WRITE','KNOWLEDGE_CONFIRM','RULE_CONFIG_UPDATE','PARTNER_READ','PARTNER_IMPORT','PARTNER_TEMPLATE_EXPORT','PURCHASE_READ','PURCHASE_CREATE','PURCHASE_UPDATE','PURCHASE_CONFIRM','PURCHASE_CANCEL','PURCHASE_TO_INBOUND','SALES_READ','FINANCE_PAYABLE_READ','STOCKTAKE_READ','STOCKTAKE_CREATE','STOCKTAKE_COUNT','STOCKTAKE_CONFIRM')
 ON DUPLICATE KEY UPDATE deleted=0, updated_at=NOW(3);
 INSERT INTO role_permissions (id, tenant_id, role_id, permission_id, created_at, updated_at, deleted)
 SELECT 600000 + p.id, 1, 1003, p.id, NOW(3), NOW(3), 0 FROM permissions p
-WHERE p.perm_code IN ('PRODUCT_READ','WAREHOUSE_READ','LOCATION_READ','INVENTORY_READ','INVENTORY_TXN_READ','INVENTORY_ALERT_READ','INBOUND_READ','INBOUND_CREATE','INBOUND_UPDATE','INBOUND_SUBMIT','INBOUND_WITHDRAW','INBOUND_CANCEL','INBOUND_UNAPPROVE','OUTBOUND_READ','OUTBOUND_CREATE','OUTBOUND_UPDATE','OUTBOUND_SUBMIT','OUTBOUND_WITHDRAW','OUTBOUND_CANCEL','OUTBOUND_UNAPPROVE','USER_CHANGE_PASSWORD','AGENT_TASK_READ','KNOWLEDGE_READ')
+WHERE p.perm_code IN ('PRODUCT_READ','PRODUCT_IMPORT','PRODUCT_TEMPLATE_EXPORT','IMPORT_ERROR_REPORT_READ','WAREHOUSE_READ','LOCATION_READ','INVENTORY_READ','INVENTORY_TXN_READ','INVENTORY_ALERT_READ','INVENTORY_IMPORT','INVENTORY_TEMPLATE_EXPORT','INBOUND_READ','INBOUND_CREATE','INBOUND_UPDATE','INBOUND_SUBMIT','INBOUND_WITHDRAW','INBOUND_CANCEL','INBOUND_UNAPPROVE','INBOUND_PRINT','OUTBOUND_READ','OUTBOUND_CREATE','OUTBOUND_UPDATE','OUTBOUND_SUBMIT','OUTBOUND_WITHDRAW','OUTBOUND_CANCEL','OUTBOUND_UNAPPROVE','OUTBOUND_PRINT','PICKING_PRINT','USER_CHANGE_PASSWORD','AGENT_TASK_READ','KNOWLEDGE_READ','PARTNER_READ','PURCHASE_READ','PURCHASE_CREATE','PURCHASE_UPDATE','PURCHASE_CONFIRM','PURCHASE_CANCEL','PURCHASE_TO_INBOUND','SALES_READ','FINANCE_PAYABLE_READ','STOCKTAKE_READ','STOCKTAKE_CREATE','STOCKTAKE_COUNT','STOCKTAKE_CONFIRM')
 ON DUPLICATE KEY UPDATE deleted=0, updated_at=NOW(3);
 INSERT INTO role_permissions (id, tenant_id, role_id, permission_id, created_at, updated_at, deleted)
 SELECT 700000 + p.id, 1, 1004, p.id, NOW(3), NOW(3), 0 FROM permissions p
-WHERE p.perm_code IN ('CS_SESSION_READ','CS_MESSAGE_SEND','CS_TICKET_READ','CS_TICKET_CREATE','CS_TICKET_UPDATE','CS_TICKET_ASSIGN','CS_TICKET_REMARK','CS_TRANSFER_HUMAN','CS_FAQ_READ','CS_FAQ_UPDATE','AI_CHAT','USER_CHANGE_PASSWORD','AGENT_TASK_READ','KNOWLEDGE_READ','KNOWLEDGE_DRAFT_WRITE')
+WHERE p.perm_code IN ('CS_SESSION_READ','CS_MESSAGE_SEND','CS_TICKET_READ','CS_TICKET_CREATE','CS_TICKET_UPDATE','CS_TICKET_ASSIGN','CS_TICKET_REMARK','CS_TRANSFER_HUMAN','CS_FAQ_READ','CS_FAQ_UPDATE','AI_CHAT','USER_CHANGE_PASSWORD','AGENT_TASK_READ','KNOWLEDGE_READ','KNOWLEDGE_DRAFT_WRITE','PRODUCT_READ','WAREHOUSE_READ','LOCATION_READ','INVENTORY_READ','PARTNER_READ','PARTNER_IMPORT','PARTNER_TEMPLATE_EXPORT','IMPORT_ERROR_REPORT_READ','PURCHASE_READ','SALES_READ','SALES_CREATE','SALES_UPDATE','SALES_CONFIRM','SALES_CANCEL','SALES_TO_OUTBOUND','OUTBOUND_PRINT','PICKING_PRINT','FINANCE_RECEIVABLE_READ')
 ON DUPLICATE KEY UPDATE deleted=0, updated_at=NOW(3);
 INSERT INTO role_permissions (id, tenant_id, role_id, permission_id, created_at, updated_at, deleted)
 SELECT 800000 + p.id, 1, 1005, p.id, NOW(3), NOW(3), 0 FROM permissions p
-WHERE p.perm_code IN ('PRODUCT_READ','WAREHOUSE_READ','LOCATION_READ','INVENTORY_READ','INVENTORY_TXN_READ','INVENTORY_ALERT_READ','REPORT_DASHBOARD_READ','REPORT_INVENTORY_READ','USER_CHANGE_PASSWORD','AGENT_TASK_READ','KNOWLEDGE_READ')
+WHERE p.perm_code IN ('PRODUCT_READ','WAREHOUSE_READ','LOCATION_READ','INVENTORY_READ','INVENTORY_TXN_READ','INVENTORY_ALERT_READ','REPORT_DASHBOARD_READ','REPORT_INVENTORY_READ','USER_CHANGE_PASSWORD','AGENT_TASK_READ','KNOWLEDGE_READ','PARTNER_READ','PURCHASE_READ','SALES_READ','FINANCE_PAYABLE_READ','FINANCE_RECEIVABLE_READ','STOCKTAKE_READ')
 ON DUPLICATE KEY UPDATE deleted=0, updated_at=NOW(3);
 
 -- =========================
@@ -751,16 +788,16 @@ WHERE tenant_id = 1;
 UPDATE users
 SET real_name = CASE username
   WHEN 'admin' THEN 'System Admin'
-  WHEN 'warehouse_manager' THEN 'Warehouse Manager'
+  WHEN 'warehouse01' THEN 'Warehouse Operator'
   WHEN 'operator' THEN 'Warehouse Operator'
-  WHEN 'cs_agent' THEN 'Customer Service Agent'
-  WHEN 'viewer' THEN 'Data Viewer'
+  WHEN 'cs01' THEN 'Customer Service Operator'
+  WHEN 'observer01' THEN 'Data Viewer'
   ELSE real_name END
 WHERE tenant_id = 1;
 
 UPDATE permissions
 SET perm_name = perm_code
-WHERE id BETWEEN 3001 AND 3064;
+WHERE id BETWEEN 3001 AND 3077;
 
 UPDATE product_categories
 SET category_name = CASE category_code

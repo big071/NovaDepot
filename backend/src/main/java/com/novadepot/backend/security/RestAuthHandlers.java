@@ -17,7 +17,11 @@ import java.io.IOException;
 
 @Component
 public class RestAuthHandlers implements AuthenticationEntryPoint, AccessDeniedHandler {
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
+
+    public RestAuthHandlers(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
 
     @Override
     public void commence(HttpServletRequest request, HttpServletResponse response, org.springframework.security.core.AuthenticationException authException) throws IOException {

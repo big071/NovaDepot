@@ -16,6 +16,9 @@ public class OutboundOrderEntity extends BaseEntity {
     private String outboundNo;
     private String bizType;
     private String status;
+    private String sourceType;
+    private Long sourceOrderId;
+    private String sourceOrderNo;
     private Long warehouseId;
     private Long customerId;
     private LocalDateTime expectedShipAt;

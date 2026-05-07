@@ -15,6 +15,7 @@ import java.time.LocalDateTime;
 public class PurchaseOrderEntity extends BaseEntity {
     private String purchaseNo;
     private String status;
+    private Long partnerId;
     private Long supplierId;
     private Long warehouseId;
     private BigDecimal totalAmount;

@@ -54,7 +54,7 @@ try {
   docker compose ps
 
   Write-Host "[release-checklist] 2/4 auth smoke"
-  $loginBody = @{ tenantCode = "default"; username = "admin"; password = "123456" } | ConvertTo-Json
+$loginBody = @{ tenantCode = "default"; username = "admin"; password = "admin123" } | ConvertTo-Json
   $loginResp = Invoke-RestMethod -Method Post -Uri "http://localhost:18080/api/v1/auth/login" -ContentType "application/json" -Body $loginBody
   Assert-SuccessCode $loginResp "login"
   $token = $loginResp.data.accessToken

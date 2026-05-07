@@ -3,7 +3,7 @@ import { goToPath, loginAs, loginAsAdmin } from "./helpers";
 
 const API_BASE = process.env.E2E_API_BASE_URL || "http://127.0.0.1:18080/api/v1";
 
-async function apiLogin(request: import("@playwright/test").APIRequestContext, username: string, password = "123456") {
+async function apiLogin(request: import("@playwright/test").APIRequestContext, username: string, password = "pass123") {
   const resp = await request.post(`${API_BASE}/auth/login`, {
     data: { tenantCode: "default", username, password }
   });
@@ -15,8 +15,8 @@ async function apiLogin(request: import("@playwright/test").APIRequestContext, u
 }
 
 test("失败路径：库存不足时发运失败并提示明确错误", async ({ page, request }) => {
-  const warehouseToken = await apiLogin(request, "warehouse_manager");
-  const adminToken = await apiLogin(request, "admin");
+  const warehouseToken = await apiLogin(request, "warehouse01");
+  const adminToken = await apiLogin(request, "admin", "admin123");
 
   const createResp = await request.post(`${API_BASE}/outbound-orders`, {
     headers: { Authorization: `Bearer ${warehouseToken}` },
@@ -63,7 +63,7 @@ test("失败路径：库存不足时发运失败并提示明确错误", async ({
 });
 
 test("失败路径：权限不足时页面内显示统一 403 提示", async ({ page }) => {
-  await loginAs(page, "viewer", "123456");
+  await loginAs(page, "observer01", "pass123");
   await goToPath(page, "/wms/outbound");
 
   await expect(page.getByText("当前页面暂不可用").first()).toBeVisible();
