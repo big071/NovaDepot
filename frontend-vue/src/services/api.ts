@@ -1,10 +1,10 @@
-﻿const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api/v1";
+﻿export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api/v1";
 
 type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";
 type Primitive = string | number | boolean;
 type QueryValue = Primitive | null | undefined;
 
-function getToken() {
+export function getToken() {
   return localStorage.getItem("novadepot-token") ?? "";
 }
 

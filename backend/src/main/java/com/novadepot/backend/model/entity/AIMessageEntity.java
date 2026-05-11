@@ -20,4 +20,5 @@ public class AIMessageEntity extends BaseEntity {
     private Integer latencyMs;
     private BigDecimal confidence;
     private String errorCode;
+    private String status;
 }

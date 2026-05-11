@@ -31,7 +31,7 @@ AiProviderFactory（根据配置选择 Provider）
 ai:
   provider: deepseek-chat   # 从 rule 切换为 deepseek-chat
   deepseek:
-    api-key: ${DEEPSEEK_API_KEY}
+    api-key: ${AI_DEEPSEEK_API_KEY}
     base-url: https://api.deepseek.com
 ```
 

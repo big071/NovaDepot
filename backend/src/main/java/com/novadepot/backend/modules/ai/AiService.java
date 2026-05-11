@@ -1,23 +1,30 @@
 package com.novadepot.backend.modules.ai;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novadepot.backend.common.context.RequestContext;
+import com.novadepot.backend.common.enums.ErrorCode;
+import com.novadepot.backend.common.exception.BizException;
 import com.novadepot.backend.common.utils.NoGenerator;
 import com.novadepot.backend.model.entity.AIConversationEntity;
 import com.novadepot.backend.model.entity.AIMessageEntity;
 import com.novadepot.backend.model.entity.AIPromptTemplateEntity;
+import com.novadepot.backend.model.entity.AuditLogEntity;
 import com.novadepot.backend.model.entity.AiUsageLogEntity;
 import com.novadepot.backend.modules.ai.provider.AiProvider;
 import com.novadepot.backend.modules.knowledge.KnowledgeService;
 import com.novadepot.backend.repository.AIConversationMapper;
 import com.novadepot.backend.repository.AIMessageMapper;
 import com.novadepot.backend.repository.AIPromptTemplateMapper;
+import com.novadepot.backend.repository.AuditLogMapper;
 import com.novadepot.backend.repository.AiUsageLogMapper;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -25,6 +32,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 public class AiService {
@@ -36,6 +44,9 @@ public class AiService {
     private final AIPromptTemplateMapper promptTemplateMapper;
     private final KnowledgeService knowledgeService;
     private final AiUsageLogMapper usageLogMapper;
+    private final AuditLogMapper auditLogMapper;
+    private final AiStreamRegistry streamRegistry;
+    private final ObjectMapper objectMapper;
     private final String defaultProvider;
     private final boolean paidEnabled;
 
@@ -45,6 +56,9 @@ public class AiService {
                      AIPromptTemplateMapper promptTemplateMapper,
                      KnowledgeService knowledgeService,
                      AiUsageLogMapper usageLogMapper,
+                     AuditLogMapper auditLogMapper,
+                     AiStreamRegistry streamRegistry,
+                     ObjectMapper objectMapper,
                      @Value("${app.ai.provider:rule}") String defaultProvider,
                      @Value("${app.ai.paid-enabled:false}") boolean paidEnabled) {
         this.providers = providers;
@@ -53,6 +67,9 @@ public class AiService {
         this.promptTemplateMapper = promptTemplateMapper;
         this.knowledgeService = knowledgeService;
         this.usageLogMapper = usageLogMapper;
+        this.auditLogMapper = auditLogMapper;
+        this.streamRegistry = streamRegistry;
+        this.objectMapper = objectMapper;
         this.defaultProvider = defaultProvider;
         this.paidEnabled = paidEnabled;
     }
@@ -64,7 +81,12 @@ public class AiService {
         String resolvedProviderName = resolveProviderName(request.getProviderHint());
         AIConversationEntity conversation = resolveConversation(request.getConversationId(), scene, resolvedProviderName);
 
-        saveMessage(conversation.getId(), "USER", userMessage, null, null, null, null);
+        if ("ARCHIVED".equalsIgnoreCase(conversation.getStatus())) {
+            throw new BizException(ErrorCode.BIZ_ERROR.code(), "归档会话只读，请新建会话后继续提问。");
+        }
+
+        List<Map<String, String>> historyMessages = recentContextMessages(conversation.getId());
+        saveMessage(conversation.getId(), "USER", userMessage, null, null, null, null, "COMPLETED");
 
         AiProvider provider = resolveProvider(resolvedProviderName, scene);
         String providerInput = "rule".equalsIgnoreCase(provider.providerName())
@@ -76,6 +98,7 @@ public class AiService {
         context.put("tenantId", RequestContext.tenantId());
         context.put("userId", RequestContext.userId());
         context.put("scene", scene);
+        context.put("historyMessages", historyMessages);
 
         long started = System.currentTimeMillis();
         Map<String, Object> providerResp;
@@ -103,12 +126,13 @@ public class AiService {
         Integer tokens = toInteger(providerResp.get("tokens"));
         String errorCode = fallbackFrom == null ? null : "AI_PROVIDER_FALLBACK";
 
-        saveMessage(conversation.getId(), "ASSISTANT", reply, confidence, tokens, latencyMs, errorCode);
+        saveMessage(conversation.getId(), "ASSISTANT", reply, confidence, tokens, latencyMs, errorCode, "COMPLETED");
         conversation.setProviderType(provider.providerName());
         Object model = providerResp.get("model");
         if (model != null) {
             conversation.setModelName(String.valueOf(model));
         }
+        conversation.setLastActiveAt(LocalDateTime.now());
         conversationMapper.updateById(conversation);
 
         Map<String, Object> result = new LinkedHashMap<>();
@@ -150,7 +174,8 @@ public class AiService {
                 "scene", c.getScene(),
                 "provider", c.getProviderType(),
                 "status", c.getStatus(),
-                "startedAt", c.getStartedAt()
+                "startedAt", c.getStartedAt(),
+                "lastActiveAt", c.getLastActiveAt() == null ? c.getStartedAt() : c.getLastActiveAt()
         )).toList();
     }
 
@@ -169,8 +194,164 @@ public class AiService {
                         "latencyMs", message.getLatencyMs() == null ? 0 : message.getLatencyMs(),
                         "confidence", message.getConfidence() == null ? BigDecimal.ZERO : message.getConfidence(),
                         "errorCode", message.getErrorCode() == null ? "" : message.getErrorCode(),
+                        "status", message.getStatus() == null ? "COMPLETED" : message.getStatus(),
                         "createdAt", message.getCreatedAt()
                 )).toList();
+    }
+
+    public Map<String, Object> createConversation(String scene) {
+        String normalizedScene = normalizeScene(scene);
+        String providerName = resolveProviderName(null);
+        AIConversationEntity created = createNewConversation(normalizedScene, providerName);
+        writeAudit("AI_CONVERSATION_CREATE", created.getId(), created.getConversationNo(), null,
+                Map.of("scene", normalizedScene, "status", created.getStatus()));
+        return conversationToMap(created);
+    }
+
+    public Map<String, Object> archiveConversation(Long conversationId) {
+        AIConversationEntity conversation = conversationMapper.selectOne(new LambdaQueryWrapper<AIConversationEntity>()
+                .eq(AIConversationEntity::getTenantId, RequestContext.tenantId())
+                .eq(AIConversationEntity::getId, conversationId));
+        if (conversation == null) {
+            return Map.of("archived", false, "reason", "NOT_FOUND");
+        }
+        Map<String, Object> before = conversationToMap(conversation);
+        conversation.setStatus("ARCHIVED");
+        conversation.setEndedAt(LocalDateTime.now());
+        conversation.setLastActiveAt(conversation.getLastActiveAt() == null ? LocalDateTime.now() : conversation.getLastActiveAt());
+        conversation.setUpdatedBy(RequestContext.userId());
+        conversationMapper.updateById(conversation);
+        writeAudit("AI_CONVERSATION_ARCHIVE", conversation.getId(), conversation.getConversationNo(), before, conversationToMap(conversation));
+        return conversationToMap(conversation);
+    }
+
+    public void stopStream(String requestId) {
+        streamRegistry.stop(requestId);
+        writeAudit("AI_STREAM_STOP", null, requestId, null, Map.of("requestId", requestId == null ? "" : requestId));
+    }
+
+    public SseEmitter streamChat(AiChatRequest request, String requestId) {
+        SseEmitter emitter = new SseEmitter(0L);
+        Long tenantId = RequestContext.tenantId();
+        Long userId = RequestContext.userId();
+        CompletableFuture.runAsync(() -> {
+            RequestContext.setTenantId(tenantId);
+            RequestContext.setUserId(userId);
+            try {
+                doStreamChat(request, requestId, emitter);
+            } finally {
+                streamRegistry.clear(requestId);
+                RequestContext.clear();
+            }
+        });
+        return emitter;
+    }
+
+    private void doStreamChat(AiChatRequest request, String requestId, SseEmitter emitter) {
+        String scene = normalizeScene(request.getScene());
+        String userMessage = request.getMessage() == null ? "" : request.getMessage().trim();
+        if (!StringUtils.hasText(userMessage)) {
+            sendEvent(emitter, "error", Map.of("message", "请输入问题后再发送"));
+            emitter.complete();
+            return;
+        }
+
+        String resolvedProviderName = resolveProviderName(request.getProviderHint());
+        AIConversationEntity conversation = resolveConversation(request.getConversationId(), request.getConversationNo(), scene, resolvedProviderName);
+        if ("ARCHIVED".equalsIgnoreCase(conversation.getStatus())) {
+            sendEvent(emitter, "error", Map.of("message", "归档会话只读，请新建会话后继续提问。"));
+            emitter.complete();
+            return;
+        }
+
+        List<Map<String, String>> historyMessages = recentContextMessages(conversation.getId());
+        saveMessage(conversation.getId(), "USER", userMessage, null, null, null, null, "COMPLETED");
+        AIMessageEntity assistantMessage = saveMessage(conversation.getId(), "ASSISTANT", "", null, null, null, null, "STREAMING");
+
+        Map<String, Object> context = new HashMap<>();
+        context.put("conversationId", conversation.getId());
+        context.put("tenantId", RequestContext.tenantId());
+        context.put("userId", RequestContext.userId());
+        context.put("scene", scene);
+        context.put("historyMessages", historyMessages);
+        context.put("stream", true);
+
+        sendEvent(emitter, "meta", Map.of(
+                "requestId", requestId,
+                "conversationId", conversation.getId(),
+                "conversationNo", conversation.getConversationNo(),
+                "messageId", assistantMessage.getId(),
+                "status", "STREAMING"
+        ));
+
+        long started = System.currentTimeMillis();
+        AiProvider provider = resolveProvider(resolvedProviderName, scene);
+        String providerInput = "rule".equalsIgnoreCase(provider.providerName())
+                ? userMessage
+                : renderPrompt(scene, userMessage);
+        Map<String, Object> providerResp;
+        String fallbackFrom = null;
+        try {
+            providerResp = provider.chat(scene, providerInput, context);
+        } catch (Exception ex) {
+            fallbackFrom = provider.providerName();
+            log.warn("AI stream provider failed, provider={}, scene={}, reason={}", provider.providerName(), scene, ex.getMessage());
+            saveDegradationUsageLog(context, scene, fallbackFrom, started, ex.getMessage());
+            sendEvent(emitter, "status", Map.of("status", "FALLBACK", "fallbackFrom", fallbackFrom, "message", "DeepSeek不可用，已切换至规则/模拟降级。"));
+            try {
+                provider = resolveProvider("rule", scene);
+                providerResp = provider.chat(scene, userMessage, context);
+            } catch (Exception ruleEx) {
+                providerResp = fallbackToMock(scene, userMessage, context, ruleEx.getMessage());
+                provider = resolveProvider("mock", scene);
+            }
+        }
+
+        String reply = String.valueOf(providerResp.getOrDefault("reply", ""));
+        StringBuilder streamed = new StringBuilder();
+        boolean stopped = false;
+        try {
+            for (String chunk : chunks(reply, 8)) {
+                if (streamRegistry.isStopped(requestId)) {
+                    stopped = true;
+                    break;
+                }
+                streamed.append(chunk);
+                sendEvent(emitter, "token", Map.of("content", chunk));
+                sleepQuietly(25);
+            }
+            int latencyMs = (int) (System.currentTimeMillis() - started);
+            String finalContent = stopped ? streamed.toString() : reply;
+            updateMessage(assistantMessage, finalContent, toBigDecimal(providerResp.get("confidence")),
+                    toInteger(providerResp.get("tokens")), latencyMs, fallbackFrom == null ? null : "AI_PROVIDER_FALLBACK",
+                    stopped ? "STOPPED" : "COMPLETED");
+            conversation.setProviderType(provider.providerName());
+            Object model = providerResp.get("model");
+            if (model != null) {
+                conversation.setModelName(String.valueOf(model));
+            }
+            conversation.setLastActiveAt(LocalDateTime.now());
+            conversationMapper.updateById(conversation);
+            if (stopped) {
+                sendEvent(emitter, "status", Map.of("status", "STOPPED"));
+            }
+            Map<String, Object> done = new LinkedHashMap<>();
+            done.put("conversationId", conversation.getId());
+            done.put("conversationNo", conversation.getConversationNo());
+            done.put("provider", provider.providerName());
+            done.put("status", stopped ? "STOPPED" : "COMPLETED");
+            done.put("latencyMs", latencyMs);
+            if (fallbackFrom != null) {
+                done.put("fallbackFrom", fallbackFrom);
+            }
+            sendEvent(emitter, "done", done);
+            emitter.complete();
+        } catch (Exception ex) {
+            updateMessage(assistantMessage, streamed.toString(), null, null,
+                    (int) (System.currentTimeMillis() - started), "AI_STREAM_FAILED", "FAILED");
+            sendEvent(emitter, "error", Map.of("message", "流式输出失败，前端可切换为普通回复。"));
+            emitter.complete();
+        }
     }
 
     public List<Map<String, Object>> conversationMessagesByNo(String conversationNo) {
@@ -194,6 +375,31 @@ public class AiService {
             }
         }
 
+        return createNewConversation(scene, providerName);
+    }
+
+    private AIConversationEntity resolveConversation(Long conversationId, String conversationNo, String scene, String providerName) {
+        if (conversationId != null) {
+            AIConversationEntity existed = conversationMapper.selectOne(new LambdaQueryWrapper<AIConversationEntity>()
+                    .eq(AIConversationEntity::getTenantId, RequestContext.tenantId())
+                    .eq(AIConversationEntity::getId, conversationId));
+            if (existed != null) {
+                return existed;
+            }
+        }
+        if (StringUtils.hasText(conversationNo)) {
+            AIConversationEntity existed = conversationMapper.selectOne(new LambdaQueryWrapper<AIConversationEntity>()
+                    .eq(AIConversationEntity::getTenantId, RequestContext.tenantId())
+                    .eq(AIConversationEntity::getConversationNo, conversationNo.trim())
+                    .last("limit 1"));
+            if (existed != null) {
+                return existed;
+            }
+        }
+        return createNewConversation(scene, providerName);
+    }
+
+    private AIConversationEntity createNewConversation(String scene, String providerName) {
         AIConversationEntity created = new AIConversationEntity();
         created.setTenantId(RequestContext.tenantId());
         created.setConversationNo(NoGenerator.next("AI"));
@@ -201,6 +407,7 @@ public class AiService {
         created.setProviderType(providerName);
         created.setStatus("ACTIVE");
         created.setStartedAt(LocalDateTime.now());
+        created.setLastActiveAt(LocalDateTime.now());
         created.setCreatedBy(RequestContext.userId());
         created.setUpdatedBy(RequestContext.userId());
         conversationMapper.insert(created);
@@ -286,13 +493,14 @@ public class AiService {
         }
     }
 
-    private void saveMessage(Long conversationId,
-                             String role,
-                             String content,
-                             BigDecimal confidence,
-                             Integer tokens,
-                             Integer latencyMs,
-                             String errorCode) {
+    private AIMessageEntity saveMessage(Long conversationId,
+                                        String role,
+                                        String content,
+                                        BigDecimal confidence,
+                                        Integer tokens,
+                                        Integer latencyMs,
+                                        String errorCode,
+                                        String status) {
         AIMessageEntity message = new AIMessageEntity();
         message.setTenantId(RequestContext.tenantId());
         message.setConversationId(conversationId);
@@ -302,9 +510,28 @@ public class AiService {
         message.setTokens(tokens);
         message.setLatencyMs(latencyMs);
         message.setErrorCode(errorCode);
+        message.setStatus(status);
         message.setCreatedBy(RequestContext.userId());
         message.setUpdatedBy(RequestContext.userId());
         messageMapper.insert(message);
+        return message;
+    }
+
+    private void updateMessage(AIMessageEntity message,
+                               String content,
+                               BigDecimal confidence,
+                               Integer tokens,
+                               Integer latencyMs,
+                               String errorCode,
+                               String status) {
+        message.setContent(content == null ? "" : content);
+        message.setConfidence(confidence);
+        message.setTokens(tokens);
+        message.setLatencyMs(latencyMs);
+        message.setErrorCode(errorCode);
+        message.setStatus(status);
+        message.setUpdatedBy(RequestContext.userId());
+        messageMapper.updateById(message);
     }
 
     private void saveDegradationUsageLog(Map<String, Object> context,
@@ -402,6 +629,98 @@ public class AiService {
             return Integer.parseInt(value.toString());
         } catch (Exception ignored) {
             return null;
+        }
+    }
+
+    private List<Map<String, String>> recentContextMessages(Long conversationId) {
+        List<AIMessageEntity> rows = messageMapper.selectList(new LambdaQueryWrapper<AIMessageEntity>()
+                .eq(AIMessageEntity::getTenantId, RequestContext.tenantId())
+                .eq(AIMessageEntity::getConversationId, conversationId)
+                .in(AIMessageEntity::getRole, List.of("USER", "ASSISTANT"))
+                .in(AIMessageEntity::getStatus, List.of("COMPLETED", "STOPPED"))
+                .orderByDesc(AIMessageEntity::getId)
+                .last("limit 40"));
+        java.util.Collections.reverse(rows);
+        return rows.stream()
+                .map(message -> Map.of(
+                        "role", "ASSISTANT".equalsIgnoreCase(message.getRole()) ? "assistant" : "user",
+                        "content", message.getContent() == null ? "" : message.getContent()
+                ))
+                .toList();
+    }
+
+    private List<String> chunks(String text, int size) {
+        if (text == null || text.isEmpty()) {
+            return List.of("");
+        }
+        List<String> result = new java.util.ArrayList<>();
+        for (int i = 0; i < text.length(); i += size) {
+            result.add(text.substring(i, Math.min(text.length(), i + size)));
+        }
+        return result;
+    }
+
+    private void sendEvent(SseEmitter emitter, String name, Object data) {
+        try {
+            emitter.send(SseEmitter.event().name(name).data(data));
+        } catch (Exception ex) {
+            throw new IllegalStateException("Failed to send SSE event", ex);
+        }
+    }
+
+    private void sleepQuietly(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private Map<String, Object> conversationToMap(AIConversationEntity c) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("id", c.getId());
+        map.put("conversationNo", c.getConversationNo());
+        map.put("scene", c.getScene());
+        map.put("provider", c.getProviderType());
+        map.put("status", c.getStatus());
+        map.put("startedAt", c.getStartedAt());
+        map.put("lastActiveAt", c.getLastActiveAt() == null ? c.getStartedAt() : c.getLastActiveAt());
+        map.put("endedAt", c.getEndedAt());
+        return map;
+    }
+
+    private void writeAudit(String action, Long resourceId, String bizNo, Object before, Object after) {
+        try {
+            AuditLogEntity audit = new AuditLogEntity();
+            audit.setTenantId(RequestContext.tenantId());
+            audit.setModule("AI");
+            audit.setAction(action);
+            audit.setResourceType("AI_CONVERSATION");
+            audit.setResourceId(resourceId == null ? null : String.valueOf(resourceId));
+            audit.setBizNo(bizNo);
+            audit.setOperatorId(RequestContext.userId());
+            audit.setBeforeJson(before == null ? null : objectMapper.writeValueAsString(before));
+            audit.setAfterJson(after == null ? null : objectMapper.writeValueAsString(after));
+            audit.setOccurredAt(LocalDateTime.now());
+            audit.setCreatedBy(RequestContext.userId());
+            audit.setUpdatedBy(RequestContext.userId());
+            auditLogMapper.insert(audit);
+        } catch (Exception ex) {
+            log.warn("Failed to write AI audit log: {}", ex.getMessage());
+        }
+    }
+
+    @Scheduled(cron = "0 0/30 * * * ?")
+    public void archiveInactiveConversations() {
+        LocalDateTime cutoff = LocalDateTime.now().minusHours(24);
+        List<AIConversationEntity> rows = conversationMapper.selectList(new LambdaQueryWrapper<AIConversationEntity>()
+                .eq(AIConversationEntity::getStatus, "ACTIVE")
+                .lt(AIConversationEntity::getLastActiveAt, cutoff)
+                .last("limit 200"));
+        for (AIConversationEntity row : rows) {
+            row.setStatus("ARCHIVED");
+            row.setEndedAt(LocalDateTime.now());
+            conversationMapper.updateById(row);
         }
     }
 }

@@ -22,4 +22,5 @@ public class AIConversationEntity extends BaseEntity {
     private String status;
     private LocalDateTime startedAt;
     private LocalDateTime endedAt;
+    private LocalDateTime lastActiveAt;
 }

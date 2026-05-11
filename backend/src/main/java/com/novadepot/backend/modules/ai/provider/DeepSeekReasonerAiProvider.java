@@ -57,6 +57,21 @@ public class DeepSeekReasonerAiProvider implements AiProvider {
         systemMsg.put("role", "system");
         systemMsg.put("content", aiProperties.getSystemPrompt());
         messages.add(systemMsg);
+        Object history = context.get("historyMessages");
+        if (history instanceof List<?> items) {
+            for (Object item : items) {
+                if (item instanceof Map<?, ?> raw) {
+                    Object role = raw.get("role");
+                    Object content = raw.get("content");
+                    if (role != null && content != null && StringUtils.hasText(String.valueOf(content))) {
+                        Map<String, String> historyMsg = new HashMap<>();
+                        historyMsg.put("role", String.valueOf(role));
+                        historyMsg.put("content", String.valueOf(content));
+                        messages.add(historyMsg);
+                    }
+                }
+            }
+        }
 
         // user message
         Map<String, String> userMsg = new HashMap<>();

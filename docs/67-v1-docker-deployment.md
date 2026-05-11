@@ -205,7 +205,7 @@ docker compose build
 | `REDIS_PORT` | 6379 | Redis 端口 |
 | `JWT_SECRET` | novadepot-secret-key-2024 | JWT 签名密钥 |
 | `AI_PROVIDER` | rule | AI Provider 类型 |
-| `DEEPSEEK_API_KEY` | — | DeepSeek API Key（付费时使用） |
+| `AI_DEEPSEEK_API_KEY` | — | DeepSeek API Key（付费时使用） |
 
 ### 8.2 Frontend (.env)
 

@@ -6,8 +6,11 @@
           <h2 class="nd-section-title">AI 会话</h2>
           <p class="nd-section-subtitle">共 {{ conversations.length }} 个会话</p>
         </div>
-        <n-button class="nd-soft-focus" size="small" :loading="loadingConversations"
-          @click="loadConversations">刷新</n-button>
+        <div class="flex gap-2">
+          <n-button class="nd-soft-focus" size="small" @click="createConversation">新建</n-button>
+          <n-button class="nd-soft-focus" size="small" :loading="loadingConversations"
+            @click="loadConversations">刷新</n-button>
+        </div>
       </div>
       <div class="nd-table-body space-y-2">
         <n-empty v-if="!loadingConversations && conversations.length === 0" description="暂无会话，可点击推荐问题快速开始。">
@@ -24,9 +27,11 @@
           @click="selectConversation(item.conversationNo)">
           <div class="flex items-center justify-between gap-2">
             <p class="font-medium">{{ item.conversationNo }}</p>
-            <n-tag size="small" :bordered="false" type="info">{{ item.provider }}</n-tag>
+            <n-tag size="small" :bordered="false" :type="item.status === 'ARCHIVED' ? 'default' : 'info'">
+              {{ item.status === 'ARCHIVED' ? '已归档' : item.provider }}
+            </n-tag>
           </div>
-          <p class="mt-1 text-xs text-text-secondary">{{ sceneLabelMap[item.scene] || item.scene }}</p>
+          <p class="mt-1 text-xs text-text-secondary">{{ sceneLabelMap[item.scene] || item.scene }} · {{ item.lastActiveAt || item.startedAt }}</p>
         </button>
       </div>
     </article>
@@ -39,6 +44,8 @@
         </div>
         <div class="flex items-center gap-2">
           <span class="nd-pill">会话：{{ activeConversationNo || "未选择" }}</span>
+          <n-button v-if="activeConversation && activeConversation.status !== 'ARCHIVED'" size="small" class="nd-soft-focus"
+            @click="archiveActiveConversation">归档</n-button>
           <n-select v-model:value="scene" :options="sceneOptions" size="small" class="w-36 nd-soft-focus" />
         </div>
       </header>
@@ -68,6 +75,7 @@
         </div>
         <n-alert v-if="lastSuccessText" type="success" :show-icon="false" class="nd-state-alert mb-3">{{ lastSuccessText
           }}</n-alert>
+        <n-alert v-if="streamStatusText" type="info" :show-icon="false" class="nd-state-alert mb-3">{{ streamStatusText }}</n-alert>
 
         <article v-if="taskRunInfo" class="mb-3 rounded-xl border border-border bg-bg/50 p-4">
           <div class="flex items-center justify-between gap-2">
@@ -129,6 +137,10 @@
             class="max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-6"
             :class="item.role === 'user' ? 'ml-auto bg-primary text-white shadow-sm' : 'border border-border bg-surface text-text-primary'">
             <p>{{ item.content }}</p>
+            <p v-if="item.role === 'assistant' && item.status && item.status !== 'COMPLETED'"
+              class="mt-1 text-xs text-text-secondary">
+              {{ statusLabel(item.status) }}
+            </p>
           </div>
         </div>
 
@@ -138,7 +150,8 @@
             <div class="flex gap-2">
               <n-input class="nd-soft-focus" v-model:value="inputText" placeholder="输入问题并发送"
                 @keyup.enter="sendMessage" />
-              <n-button class="nd-soft-focus" type="primary" :loading="sending" :disabled="!canSend"
+              <n-button v-if="sending" class="nd-soft-focus" type="warning" @click="stopGeneration">停止</n-button>
+              <n-button v-else class="nd-soft-focus" type="primary" :disabled="!canSend"
                 @click="sendMessage">发送</n-button>
             </div>
           </div>
@@ -153,10 +166,10 @@ import { computed, h, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { NAlert, NButton, NDataTable, NEmpty, NInput, NSelect, NTag, useMessage } from "naive-ui";
 import type { DataTableColumns } from "naive-ui";
-import { aiApi, type AiConversation, type AiMessage } from "@/services/ai";
+import { aiApi, streamAiChat, type AiConversation, type AiMessage, type AiStreamEvent } from "@/services/ai";
 import type { KnowledgeRef } from "@/services/knowledge";
 
-type ChatMessage = { role: "user" | "assistant"; content: string };
+type ChatMessage = { role: "user" | "assistant"; content: string; status?: "PENDING" | "STREAMING" | "COMPLETED" | "FAILED" | "STOPPED" };
 type SummaryCard = { title: string; value: string };
 
 const uiMessage = useMessage();
@@ -166,11 +179,14 @@ const loadingMessages = ref(false);
 const sending = ref(false);
 const errorText = ref("");
 const lastSuccessText = ref("");
+const streamStatusText = ref("");
 const scene = ref("enterprise");
 const inputText = ref("");
 const conversations = ref<AiConversation[]>([]);
 const activeConversationNo = ref<string | null>(null);
 const messageMap = ref<Record<string, ChatMessage[]>>({});
+const abortController = ref<AbortController | null>(null);
+const activeRequestId = ref("");
 const taskRunInfo = ref<{
   id?: string;
   taskCode?: string;
@@ -198,6 +214,7 @@ const activeMessages = computed(() => {
   if (!activeConversationNo.value) return [];
   return messageMap.value[activeConversationNo.value] ?? [];
 });
+const activeConversation = computed(() => conversations.value.find((item) => item.conversationNo === activeConversationNo.value) ?? null);
 const recommendedQuestions = computed(() => {
   if (scene.value === "warehouse") {
     return [
@@ -219,7 +236,7 @@ const recommendedQuestions = computed(() => {
     "请给管理层一份今日运营摘要，包含下一步建议。"
   ];
 });
-const canSend = computed(() => !sending.value && !loadingMessages.value && Boolean(inputText.value.trim()));
+const canSend = computed(() => !sending.value && !loadingMessages.value && Boolean(inputText.value.trim()) && activeConversation.value?.status !== "ARCHIVED");
 
 const taskView = computed<Record<string, unknown>>(() => {
   const current = taskRunInfo.value;
@@ -386,8 +403,12 @@ async function loadConversations() {
   errorText.value = "";
   try {
     conversations.value = await aiApi.conversations();
-    if (!activeConversationNo.value && conversations.value.length > 0) {
-      await selectConversation(conversations.value[0].conversationNo);
+    const current = conversations.value.find((item) => item.conversationNo === activeConversationNo.value);
+    if (!activeConversationNo.value || current?.status === "ARCHIVED") {
+      const next = conversations.value.find((item) => item.status !== "ARCHIVED") ?? conversations.value[0];
+      if (next) {
+        await selectConversation(next.conversationNo);
+      }
     }
   } catch (error) {
     errorText.value = error instanceof Error ? error.message : "会话列表加载失败";
@@ -400,7 +421,8 @@ async function loadConversations() {
 function toChatMessage(msg: AiMessage): ChatMessage {
   return {
     role: msg.role === "USER" ? "user" : "assistant",
-    content: msg.content
+    content: msg.content,
+    status: msg.status ?? "COMPLETED"
   };
 }
 
@@ -424,6 +446,34 @@ async function selectConversation(conversationNo: string) {
   await loadConversationMessages(conversationNo);
 }
 
+async function createConversation() {
+  errorText.value = "";
+  try {
+    const created = await aiApi.createConversation(scene.value);
+    await loadConversations();
+    activeConversationNo.value = created.conversationNo;
+    messageMap.value[created.conversationNo] = [];
+    lastSuccessText.value = "新会话已创建";
+  } catch (error) {
+    errorText.value = error instanceof Error ? error.message : "新建会话失败";
+    uiMessage.error(errorText.value);
+  }
+}
+
+async function archiveActiveConversation() {
+  const current = activeConversation.value;
+  if (!current) return;
+  errorText.value = "";
+  try {
+    await aiApi.archiveConversation(current.id);
+    await loadConversations();
+    lastSuccessText.value = "会话已归档";
+  } catch (error) {
+    errorText.value = error instanceof Error ? error.message : "归档会话失败";
+    uiMessage.error(errorText.value);
+  }
+}
+
 async function sendMessage() {
   if (!inputText.value.trim()) {
     uiMessage.warning("请输入问题后再发送");
@@ -431,6 +481,8 @@ async function sendMessage() {
   }
 
   errorText.value = "";
+  streamStatusText.value = "";
+  lastSuccessText.value = "";
   const content = inputText.value.trim();
   const normalizedMessage = normalizeMessageForAgent(content);
   inputText.value = "";
@@ -440,8 +492,63 @@ async function sendMessage() {
     messageMap.value[optimisticConversationNo] = [];
   }
   messageMap.value[optimisticConversationNo].push({ role: "user", content });
+  messageMap.value[optimisticConversationNo].push({ role: "assistant", content: "", status: "STREAMING" });
 
   sending.value = true;
+  const requestId = crypto.randomUUID();
+  activeRequestId.value = requestId;
+  abortController.value = new AbortController();
+  try {
+    await streamAiChat({
+      scene: scene.value,
+      message: normalizedMessage,
+      conversationNo: activeConversationNo.value ?? undefined,
+      providerHint: "deepseek-chat"
+    }, requestId, abortController.value.signal, (event) => handleStreamEvent(event, optimisticConversationNo));
+    lastSuccessText.value = `消息发送成功：${new Date().toLocaleString("zh-CN", { hour12: false })}`;
+    await loadConversations();
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      markLastAssistant(optimisticConversationNo, "STOPPED");
+      streamStatusText.value = "已停止生成，保留当前已输出内容。";
+    } else {
+      streamStatusText.value = "流式输出失败，已尝试切换为普通回复。";
+      await sendNonStreamingFallback(normalizedMessage, optimisticConversationNo);
+    }
+  } finally {
+    sending.value = false;
+    abortController.value = null;
+    activeRequestId.value = "";
+  }
+}
+
+function handleStreamEvent(event: AiStreamEvent, optimisticConversationNo: string) {
+  if (event.event === "meta") {
+    const conversationNo = String(event.data.conversationNo ?? optimisticConversationNo);
+    if (conversationNo !== optimisticConversationNo && messageMap.value[optimisticConversationNo]) {
+      messageMap.value[conversationNo] = messageMap.value[optimisticConversationNo];
+      delete messageMap.value[optimisticConversationNo];
+    }
+    activeConversationNo.value = conversationNo;
+    return;
+  }
+  const conversationNo = activeConversationNo.value ?? optimisticConversationNo;
+  if (event.event === "token") {
+    appendAssistantToken(conversationNo, event.data.content ?? "");
+  } else if (event.event === "status") {
+    streamStatusText.value = String(event.data.message ?? statusLabel(String(event.data.status ?? "STREAMING")));
+    if (event.data.status === "STOPPED") markLastAssistant(conversationNo, "STOPPED");
+  } else if (event.event === "done") {
+    markLastAssistant(conversationNo, String(event.data.status ?? "COMPLETED") as ChatMessage["status"]);
+    if (event.data.fallbackFrom) {
+      streamStatusText.value = `DeepSeek 不可用，已从 ${event.data.fallbackFrom} 降级完成。`;
+    }
+  } else if (event.event === "error") {
+    throw new Error(event.data.message || "流式输出失败");
+  }
+}
+
+async function sendNonStreamingFallback(normalizedMessage: string, optimisticConversationNo: string) {
   try {
     const resp = await aiApi.chat({
       scene: scene.value,
@@ -449,34 +556,57 @@ async function sendMessage() {
       conversationNo: activeConversationNo.value ?? undefined,
       providerHint: "deepseek-chat"
     });
-
     activeConversationNo.value = resp.conversationNo;
     if (optimisticConversationNo !== resp.conversationNo && messageMap.value[optimisticConversationNo]) {
       delete messageMap.value[optimisticConversationNo];
     }
     await loadConversations();
     await loadConversationMessages(resp.conversationNo);
-    if (resp.taskRouted && resp.taskRun) {
-      taskRunInfo.value = {
-        id: String(resp.taskRun.id ?? ""),
-        taskCode: resp.taskCode,
-        taskName: resp.taskName,
-        executionBasis: resp.executionBasis,
-        executionResult: resp.executionResult,
-        resultView: resp.resultView
-      };
-    } else {
-      taskRunInfo.value = null;
-    }
     lastKnowledgeRefs.value = resp.knowledgeRefs || [];
     lastKnowledgeNotice.value = resp.knowledgeFallbackNotice || "";
-    lastSuccessText.value = `消息发送成功：${new Date().toLocaleString("zh-CN", { hour12: false })}`;
   } catch (error) {
+    markLastAssistant(activeConversationNo.value ?? optimisticConversationNo, "FAILED");
     errorText.value = error instanceof Error ? error.message : "AI 回复失败";
     uiMessage.error(errorText.value);
-  } finally {
-    sending.value = false;
   }
+}
+
+async function stopGeneration() {
+  if (!activeRequestId.value) return;
+  abortController.value?.abort();
+  try {
+    await aiApi.stopStream(activeRequestId.value);
+  } catch {
+    // Local abort already stopped the UI stream; backend cleanup is best-effort.
+  }
+}
+
+function appendAssistantToken(conversationNo: string, token: string) {
+  const list = messageMap.value[conversationNo] ?? [];
+  const last = [...list].reverse().find((item) => item.role === "assistant");
+  if (last) {
+    last.content += token;
+    last.status = "STREAMING";
+  }
+}
+
+function markLastAssistant(conversationNo: string, status: ChatMessage["status"]) {
+  const list = messageMap.value[conversationNo] ?? [];
+  const last = [...list].reverse().find((item) => item.role === "assistant");
+  if (last) {
+    last.status = status;
+  }
+}
+
+function statusLabel(status: string) {
+  const map: Record<string, string> = {
+    PENDING: "等待生成",
+    STREAMING: "生成中...",
+    COMPLETED: "已完成",
+    FAILED: "生成失败",
+    STOPPED: "已停止"
+  };
+  return map[status] || status;
 }
 
 function normalizeMessageForAgent(content: string) {

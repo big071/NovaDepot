@@ -359,6 +359,38 @@ select
   if ($sprint4Inconsistent -gt 0) { throw "sprint4 import/backup inconsistent rows found: $sprint4Inconsistent" }
   Write-Host "sprint4 import, backup and tenant reserve consistency passed"
 
+  Write-Host "[data-quality] v1.2 sprint2 AI streaming/session consistency"
+  $aiSprint2Inconsistent = [int](Query-Scalar @"
+select
+  (select count(*)
+     from ai_conversations
+    where tenant_id = 1
+      and deleted = 0
+      and (last_active_at is null or status not in ('ACTIVE','ARCHIVED'))) +
+  (select count(*)
+     from ai_conversations
+    where tenant_id = 1
+      and deleted = 0
+      and status = 'ARCHIVED'
+      and ended_at is null) +
+  (select count(*)
+     from ai_messages
+    where tenant_id = 1
+      and deleted = 0
+      and status not in ('PENDING','STREAMING','COMPLETED','FAILED','STOPPED')) +
+  (select count(*)
+     from ai_messages m
+     left join ai_conversations c
+       on c.id = m.conversation_id
+      and c.tenant_id = m.tenant_id
+      and c.deleted = 0
+    where m.tenant_id = 1
+      and m.deleted = 0
+      and c.id is null);
+"@)
+  if ($aiSprint2Inconsistent -gt 0) { throw "v1.2 sprint2 AI inconsistent rows found: $aiSprint2Inconsistent" }
+  Write-Host "v1.2 sprint2 AI streaming/session consistency passed"
+
   Write-Host "[data-quality] passed"
 } catch {
   Write-Error "[data-quality] failed: $($_.Exception.Message)"

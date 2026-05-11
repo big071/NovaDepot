@@ -31,8 +31,18 @@ app:
       fail-max-attempts: ${APP_AUTH_LOGIN_FAIL_MAX_ATTEMPTS:5}
       lock-minutes: ${APP_AUTH_LOGIN_LOCK_MINUTES:15}
   ai:
-    provider: ${AI_PROVIDER:rule}
+    provider: ${AI_PROVIDER:deepseek-chat}
+    model: ${AI_MODEL:deepseek-chat}
     paid-enabled: ${AI_PAID_ENABLED:false}
+    connect-timeout: ${AI_CONNECT_TIMEOUT:5000}
+    read-timeout: ${AI_READ_TIMEOUT:30000}
+    max-input-chars: ${AI_MAX_INPUT_CHARS:4096}
+    deepseek:
+      enabled: ${AI_DEEPSEEK_ENABLED:false}
+      base-url: ${AI_DEEPSEEK_BASE_URL:https://api.deepseek.com}
+      api-key: ${AI_DEEPSEEK_API_KEY:}
+      chat-model: ${AI_DEEPSEEK_CHAT_MODEL:deepseek-chat}
+      reasoner-model: ${AI_DEEPSEEK_REASONER_MODEL:deepseek-reasoner}
     rule:
       low-stock-threshold: ${AI_RULE_LOW_STOCK_THRESHOLD:10}
       abnormal-change-threshold: ${AI_RULE_ABNORMAL_CHANGE_THRESHOLD:100}
