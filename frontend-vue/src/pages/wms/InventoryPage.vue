@@ -4,43 +4,43 @@
       <div class="nd-hero-header">
         <div>
           <p class="text-xs uppercase tracking-[0.14em] text-text-secondary">Inventory</p>
-          <h1 class="nd-page-title">搴撳瓨绠＄悊</h1>
-          <p class="nd-page-subtitle">Inventory, low-stock alerts, CSV import, and movement history.</p>
+          <h1 class="nd-page-title">库存管理</h1>
+          <p class="nd-page-subtitle">库存、低库存预警、CSV 导入与流水历史。</p>
         </div>
         <input ref="importInput" class="hidden" type="file" accept=".csv,text/csv" @change="onImportFile" />
         <n-button v-if="authStore.hasPermission('INVENTORY_TEMPLATE_EXPORT')" class="nd-soft-focus" @click="downloadTemplate">CSV模板</n-button>
         <n-button v-if="authStore.hasPermission('INVENTORY_IMPORT')" class="nd-soft-focus" @click="importInput?.click()">CSV导入</n-button>
-        <n-button class="nd-soft-focus" :loading="loading" @click="loadData">鍒锋柊</n-button>
+        <n-button class="nd-soft-focus" :loading="loading" @click="loadData">刷新</n-button>
       </div>
       <div class="nd-hero-meta">
-        <span class="nd-pill">搴撳瓨璁板綍锛歿{ displayInventoryRows.length }}</span>
-        <span class="nd-pill">棰勮椤癸細{{ alertRows.length }}</span>
-        <span class="nd-pill">娴佹按锛歿{ txnRows.length }}</span>
+        <span class="nd-pill">库存记录：{{ displayInventoryRows.length }}</span>
+        <span class="nd-pill">预警项：{{ alertRows.length }}</span>
+        <span class="nd-pill">流水：{{ txnRows.length }}</span>
       </div>
     </header>
     <section class="nd-toolbar">
       <div class="nd-toolbar-group">
         <article class="nd-metric-chip">
-          <p class="nd-metric-label">鏅鸿兘鍏ュ彛</p>
-          <p class="nd-metric-value">Replenishment and risk analysis</p>
+          <p class="nd-metric-label">智能入口</p>
+          <p class="nd-metric-value">补货与风险分析</p>
         </article>
       </div>
       <div class="flex items-center gap-2">
         <n-button class="nd-soft-focus" size="small" :loading="smartLoading === 'LOW_STOCK_ANALYSIS'" @click="runSmartTask('LOW_STOCK_ANALYSIS')">
-          浣庡簱瀛樺垎鏋?
+          低库存分析
         </n-button>
         <n-button class="nd-soft-focus" size="small" :loading="smartLoading === 'REPLENISH_SUGGESTION'" @click="runSmartTask('REPLENISH_SUGGESTION')">
-          鐢熸垚琛ヨ揣寤鸿
+          生成补货建议
         </n-button>
       </div>
     </section>
     <n-alert class="nd-state-alert" type="info" :show-icon="false">
-      鍏堢湅鈥滀綆搴撳瓨棰勮鈥濓紝鍐嶅喅瀹氣€滃叆搴撹ˉ璐р€濇垨鈥滆皟鏁村彂杩愪紭鍏堢骇鈥濄€傚簱瀛樺垪琛ㄣ€侀璀︿笌娴佹按浼氬悓姝ュ埛鏂般€?
+      先看“低库存预警”，再决定“入库补货”或“调整发运优先级”。库存列表、预警与流水会同步刷新。
     </n-alert>
     <n-alert v-if="errorText" class="nd-state-alert" type="error" :show-icon="false">
       <div class="flex items-center justify-between gap-2">
         <span>{{ errorText }}</span>
-        <n-button text type="primary" @click="loadData">閲嶈瘯</n-button>
+        <n-button text type="primary" @click="loadData">重试</n-button>
       </div>
     </n-alert>
     <n-alert v-else-if="lastSuccessText" class="nd-state-alert" type="success" :show-icon="false">{{ lastSuccessText }}</n-alert>
@@ -48,21 +48,21 @@
     <n-alert v-if="dashboardHint" class="nd-state-alert" type="info" :show-icon="false">
       <div class="flex items-center justify-between gap-2">
         <span>{{ dashboardHint }}</span>
-        <n-button text type="primary" @click="clearDashboardFilter">Clear Filter</n-button>
+        <n-button text type="primary" @click="clearDashboardFilter">清除筛选</n-button>
       </div>
     </n-alert>
 
     <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
       <article class="nd-kpi-card">
-        <p class="text-sm text-text-secondary">Inventory records</p>
+        <p class="text-sm text-text-secondary">库存记录</p>
         <p class="nd-kpi-value text-2xl">{{ displayInventoryRows.length }}</p>
       </article>
       <article class="nd-kpi-card">
-        <p class="text-sm text-text-secondary">浣庡簱瀛橀」</p>
+        <p class="text-sm text-text-secondary">低库存项</p>
         <p class="nd-kpi-value text-2xl">{{ alertRows.length }}</p>
       </article>
       <article class="nd-kpi-card">
-        <p class="text-sm text-text-secondary">Recent transactions</p>
+        <p class="text-sm text-text-secondary">近期流水</p>
         <p class="nd-kpi-value text-2xl">{{ txnRows.length }}</p>
       </article>
     </div>
@@ -70,57 +70,57 @@
     <section class="nd-toolbar">
       <div class="nd-toolbar-group">
         <article class="nd-metric-chip">
-          <p class="nd-metric-label">Low-stock ratio</p>
+          <p class="nd-metric-label">低库存占比</p>
           <p class="nd-metric-value">{{ displayInventoryRows.length > 0 ? Math.round((alertRows.length / displayInventoryRows.length) * 100) : 0 }}%</p>
         </article>
         <article class="nd-metric-chip">
-          <p class="nd-metric-label">Current status</p>
-          <p class="nd-metric-value">{{ loading ? "Syncing" : "Ready" }}</p>
+          <p class="nd-metric-label">当前状态</p>
+          <p class="nd-metric-value">{{ loading ? "同步中" : "就绪" }}</p>
         </article>
       </div>
-      <div class="nd-status-strip">搴撳瓨鍒楄〃銆侀璀﹀垪琛ㄤ笌娴佹按鏁版嵁淇濇寔缁熶竴鍒锋柊</div>
+      <div class="nd-status-strip">库存列表、预警列表与流水数据保持统一刷新</div>
     </section>
     <article class="nd-table-shell">
       <div class="nd-table-head">
-        <h3 class="nd-section-title">Low-stock Actions</h3>
+        <h3 class="nd-section-title">低库存动作</h3>
       </div>
       <div class="nd-table-body text-xs text-text-secondary">
-        浼樺厛璇诲彇鍟嗗搧瑙勬牸涓殑鈥滃畨鍏ㄥ簱瀛?XX鈥濓紱鑻ユ湭閰嶇疆锛屽垯浣跨敤榛樿闃堝€?10銆傞〉闈㈤璀︿笌浠〃鐩樹綆搴撳瓨缁熻鎸夊悓涓€鍙ｅ緞璁＄畻銆?
+        优先读取商品规格中的“安全库存 XX”；若未配置，则使用默认阈值 10。页面预警与仪表盘低库存统计按同一口径计算。
       </div>
     </article>
 
     <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
       <article class="nd-table-shell">
         <div class="nd-table-head">
-        <h3 class="nd-section-title">搴撳瓨鍒楄〃</h3>
-        <p class="nd-section-subtitle">Current inventory snapshot by warehouse, location, and product.</p>
+        <h3 class="nd-section-title">库存列表</h3>
+        <p class="nd-section-subtitle">按仓库、库位和商品查看当前库存快照。</p>
         </div>
         <div class="nd-table-body">
         <n-data-table class="nd-table mt-3" :columns="inventoryColumns" :data="displayInventoryRows" :loading="loading" :bordered="false" />
-        <n-empty v-if="!loading && displayInventoryRows.length === 0" class="nd-empty-shell mt-4" description="鏆傛棤搴撳瓨璁板綍" />
+        <n-empty v-if="!loading && displayInventoryRows.length === 0" class="nd-empty-shell mt-4" description="暂无库存记录" />
         </div>
       </article>
 
       <article class="nd-table-shell">
         <div class="nd-table-head">
-        <h3 class="nd-section-title">Low-stock Alerts</h3>
-        <p class="nd-section-subtitle">鍙紭鍏堝鐞嗗彲鐢ㄥ簱瀛樺亸浣庣殑鍟嗗搧</p>
+        <h3 class="nd-section-title">低库存预警</h3>
+        <p class="nd-section-subtitle">可优先处理可用库存偏低的商品</p>
         </div>
         <div class="nd-table-body">
         <n-data-table class="nd-table mt-3" :columns="alertColumns" :data="alertRows" :loading="loading" :bordered="false" />
-        <n-empty v-if="!loading && alertRows.length === 0" class="nd-empty-shell mt-4" description="No low-stock alerts." />
+        <n-empty v-if="!loading && alertRows.length === 0" class="nd-empty-shell mt-4" description="暂无低库存预警" />
         </div>
       </article>
     </div>
 
     <article class="nd-table-shell">
       <div class="nd-table-head">
-      <h3 class="nd-section-title">Inventory Transactions</h3>
-      <p class="nd-section-subtitle">鏀寔杩芥函鍏ュ簱銆佸嚭搴撳甫鏉ョ殑搴撳瓨鍙樺寲</p>
+      <h3 class="nd-section-title">库存流水</h3>
+      <p class="nd-section-subtitle">支持追踪入库、出库带来的库存变化</p>
       </div>
       <div class="nd-table-body">
       <n-data-table class="nd-table mt-3" :columns="txnColumns" :data="txnRows" :loading="loading" :bordered="false" />
-      <n-empty v-if="!loading && txnRows.length === 0" class="nd-empty-shell mt-4" description="鏆傛棤搴撳瓨娴佹按" />
+      <n-empty v-if="!loading && txnRows.length === 0" class="nd-empty-shell mt-4" description="暂无库存流水" />
       </div>
     </article>
   </section>
@@ -163,29 +163,29 @@ const displayInventoryRows = computed(() => {
 
 const inventoryColumns: DataTableColumns<InventoryItem> = [
   { title: "ID", key: "id", width: 80 },
-  { title: "浠撳簱", key: "warehouseId", render: (row) => resolveWarehouseName(row.warehouseId) },
-  { title: "搴撲綅", key: "locationId", render: (row) => resolveLocationName(row.locationId) },
-  { title: "鍟嗗搧", key: "productId", render: (row) => resolveProductName(row.productId) },
-  { title: "鍙敤搴撳瓨", key: "availableQty" },
-  { title: "閿佸畾搴撳瓨", key: "lockedQty" },
-  { title: "In Transit", key: "inTransitQty" }
+  { title: "仓库", key: "warehouseId", render: (row) => resolveWarehouseName(row.warehouseId) },
+  { title: "库位", key: "locationId", render: (row) => resolveLocationName(row.locationId) },
+  { title: "商品", key: "productId", render: (row) => resolveProductName(row.productId) },
+  { title: "可用库存", key: "availableQty" },
+  { title: "锁定库存", key: "lockedQty" },
+  { title: "在途库存", key: "inTransitQty" }
 ];
 
 const alertColumns: DataTableColumns<InventoryItem> = [
-  { title: "鍟嗗搧", key: "productId", render: (row) => resolveProductName(row.productId) },
-  { title: "浠撳簱", key: "warehouseId", render: (row) => resolveWarehouseName(row.warehouseId) },
-  { title: "搴撲綅", key: "locationId", render: (row) => resolveLocationName(row.locationId) },
-  { title: "鍙敤搴撳瓨", key: "availableQty" }
+  { title: "商品", key: "productId", render: (row) => resolveProductName(row.productId) },
+  { title: "仓库", key: "warehouseId", render: (row) => resolveWarehouseName(row.warehouseId) },
+  { title: "库位", key: "locationId", render: (row) => resolveLocationName(row.locationId) },
+  { title: "可用库存", key: "availableQty" }
 ];
 
 const txnColumns: DataTableColumns<InventoryTransaction> = [
-  { title: "Txn No", key: "txnNo" },
-  { title: "涓氬姟绫诲瀷", key: "bizType" },
-  { title: "涓氬姟鍗曞彿", key: "bizNo" },
-  { title: "鍟嗗搧", key: "productId", render: (row) => resolveProductName(row.productId) },
-  { title: "Change Qty", key: "changeQty" },
-  { title: "缁撳瓨", key: "afterQty" },
-  { title: "鏃堕棿", key: "occurredAt" }
+  { title: "流水号", key: "txnNo" },
+  { title: "业务类型", key: "bizType" },
+  { title: "业务单号", key: "bizNo" },
+  { title: "商品", key: "productId", render: (row) => resolveProductName(row.productId) },
+  { title: "变动数量", key: "changeQty" },
+  { title: "结存", key: "afterQty" },
+  { title: "时间", key: "occurredAt" }
 ];
 
 function resolveWarehouseName(warehouseId: string) {
@@ -206,7 +206,7 @@ function resolveProductName(productId: string) {
 function applyRouteHint() {
   const from = String(route.query.from ?? "");
   const focus = String(route.query.focus ?? "");
-  dashboardHint.value = from === "dashboard" && focus === "low-stock" ? "Low-stock filter applied" : "";
+  dashboardHint.value = from === "dashboard" && focus === "low-stock" ? "已应用低库存筛选" : "";
 }
 
 function downloadText(filename: string, content: string) {
@@ -268,10 +268,10 @@ async function loadData() {
     warehouseRows.value = warehouses;
     productRows.value = products;
     locationRows.value = locations;
-    lastSuccessText.value = `搴撳瓨鏁版嵁宸插埛鏂帮細${new Date().toLocaleString("zh-CN", { hour12: false })}`;
+    lastSuccessText.value = `库存数据已刷新：${new Date().toLocaleString("zh-CN", { hour12: false })}`;
     applyRouteHint();
   } catch (error) {
-    errorText.value = error instanceof Error ? error.message : "搴撳瓨鏁版嵁鍔犺浇澶辫触";
+    errorText.value = error instanceof Error ? error.message : "库存数据加载失败";
     message.error(errorText.value);
   } finally {
     loading.value = false;
@@ -280,17 +280,17 @@ async function loadData() {
 
 async function runSmartTask(taskCode: "LOW_STOCK_ANALYSIS" | "REPLENISH_SUGGESTION") {
   if (!authStore.hasPermission("AGENT_TASK_EXECUTE")) {
-    message.warning("Current account cannot execute agent tasks");
+    message.warning("当前账号不能执行智能任务");
     return;
   }
   smartLoading.value = taskCode;
   try {
     const target = taskCode === "LOW_STOCK_ANALYSIS" ? { limit: 8, recentDays: 7 } : { limit: 8, lowStockThreshold: 10 };
     const run = await agentApi.executeTask(taskCode, target);
-    message.success(`${run.taskName} generated`);
+    message.success(`${run.taskName} 已生成`);
     await router.push({ path: "/agent/center", query: { runId: run.id } });
   } catch (error) {
-    message.error(error instanceof Error ? error.message : "鏅鸿兘浠诲姟鎵ц澶辫触");
+    message.error(error instanceof Error ? error.message : "智能任务执行失败");
   } finally {
     smartLoading.value = "";
   }
