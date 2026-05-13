@@ -31,6 +31,8 @@ const authStore = useAuthStore();
 const roleMenuMap: Record<string, Array<{ label: string; path: string; permission: string }>> = {
   admin: [
     { label: "经营总览", path: "/dashboard", permission: "REPORT_DASHBOARD_READ" },
+    { label: "通知中心", path: "/notifications", permission: "NOTIFY_READ" },
+    { label: "报表中心", path: "/reports", permission: "REPORT_CENTER_READ" },
     { label: "商品管理", path: "/wms/products", permission: "PRODUCT_READ" },
     { label: "仓库管理", path: "/wms/warehouses", permission: "WAREHOUSE_READ" },
     { label: "库位管理", path: "/wms/locations", permission: "LOCATION_READ" },
@@ -52,6 +54,8 @@ const roleMenuMap: Record<string, Array<{ label: string; path: string; permissio
   ],
   warehouse_ops: [
     { label: "仓储工作台", path: "/dashboard", permission: "REPORT_DASHBOARD_READ" },
+    { label: "通知中心", path: "/notifications", permission: "NOTIFY_READ" },
+    { label: "报表中心", path: "/reports", permission: "REPORT_CENTER_READ" },
     { label: "库存管理", path: "/wms/inventory", permission: "INVENTORY_READ" },
     { label: "库存盘点", path: "/wms/stock-take", permission: "STOCKTAKE_READ" },
     { label: "入库管理", path: "/wms/inbound", permission: "INBOUND_READ" },
@@ -68,6 +72,8 @@ const roleMenuMap: Record<string, Array<{ label: string; path: string; permissio
   ],
   cs_ops: [
     { label: "客服工作台", path: "/cs/workspace", permission: "CS_SESSION_READ" },
+    { label: "通知中心", path: "/notifications", permission: "NOTIFY_READ" },
+    { label: "报表中心", path: "/reports", permission: "REPORT_CENTER_READ" },
     { label: "销售管理", path: "/erp/sales", permission: "SALES_READ" },
     { label: "应收台账", path: "/erp/finance", permission: "FINANCE_RECEIVABLE_READ" },
     { label: "采购单只读", path: "/erp/purchases", permission: "PURCHASE_READ" },
@@ -79,6 +85,8 @@ const roleMenuMap: Record<string, Array<{ label: string; path: string; permissio
   ],
   observer: [
     { label: "只读总览", path: "/dashboard", permission: "REPORT_DASHBOARD_READ" },
+    { label: "通知中心", path: "/notifications", permission: "NOTIFY_READ" },
+    { label: "报表中心", path: "/reports", permission: "REPORT_CENTER_READ" },
     { label: "库存建议", path: "/wms/inventory", permission: "INVENTORY_READ" },
     { label: "库存盘点", path: "/wms/stock-take", permission: "STOCKTAKE_READ" },
     { label: "往来单位", path: "/erp/partners", permission: "PARTNER_READ" },

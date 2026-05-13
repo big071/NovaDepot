@@ -6,6 +6,10 @@
         <h2 class="text-sm font-semibold">{{ authStore.roleNameZh }}工作台</h2>
       </div>
       <div class="flex items-center gap-2">
+        <n-button v-if="authStore.hasPermission('NOTIFY_READ')" secondary @click="router.push('/notifications')">
+          通知
+          <span v-if="unreadCount > 0" class="ml-1 rounded-full bg-danger px-1.5 py-0.5 text-xs text-white">{{ unreadCount }}</span>
+        </n-button>
         <span class="hidden rounded-full border border-border px-2 py-1 text-xs text-text-secondary xl:inline-flex">
           {{ authStore.profile?.realName || authStore.profile?.username || "当前用户" }}
         </span>
@@ -38,11 +42,12 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch } from "vue";
+import { onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import { NAlert, NButton, NInput, NModal, useMessage } from "naive-ui";
 import { useThemeStore } from "@/stores/theme";
 import { useAuthStore } from "@/stores/auth";
 import { useRouter } from "vue-router";
+import { notificationsApi } from "@/services/notifications";
 
 const themeStore = useThemeStore();
 const authStore = useAuthStore();
@@ -52,6 +57,8 @@ const message = useMessage();
 const showPwdModal = ref(false);
 const submitting = ref(false);
 const errorText = ref("");
+const unreadCount = ref(0);
+let unreadTimer: number | undefined;
 const form = reactive({
   currentPassword: "",
   newPassword: "",
@@ -72,7 +79,26 @@ onMounted(() => {
   if (authStore.mustChangePassword) {
     showPwdModal.value = true;
   }
+  refreshUnreadCount();
+  unreadTimer = window.setInterval(refreshUnreadCount, 60000);
+  window.addEventListener("novadepot:notifications-refresh", refreshUnreadCount);
 });
+
+onUnmounted(() => {
+  if (unreadTimer) {
+    window.clearInterval(unreadTimer);
+  }
+  window.removeEventListener("novadepot:notifications-refresh", refreshUnreadCount);
+});
+
+async function refreshUnreadCount() {
+  if (!authStore.hasPermission("NOTIFY_READ")) return;
+  try {
+    unreadCount.value = await notificationsApi.unreadCount();
+  } catch {
+    unreadCount.value = 0;
+  }
+}
 
 async function onChangePassword() {
   errorText.value = "";

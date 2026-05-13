@@ -89,6 +89,31 @@ public interface AuthQueryMapper {
     List<String> findRoleCodes(@Param("tenantId") Long tenantId,
                                @Param("userId") Long userId);
 
+    @Select("""
+            SELECT DISTINCT ur.user_id
+            FROM user_roles ur
+            JOIN roles r ON r.id = ur.role_id
+                        AND r.tenant_id = ur.tenant_id
+                        AND r.deleted = 0
+                        AND r.status = 'ACTIVE'
+            JOIN role_permissions rp ON rp.role_id = r.id
+                                   AND rp.tenant_id = ur.tenant_id
+                                   AND rp.deleted = 0
+            JOIN permissions p ON p.id = rp.permission_id
+                              AND p.deleted = 0
+                              AND p.status = 'ACTIVE'
+                              AND p.perm_code = #{permCode}
+            JOIN users u ON u.id = ur.user_id
+                        AND u.tenant_id = ur.tenant_id
+                        AND u.deleted = 0
+                        AND u.status = 'ACTIVE'
+            WHERE ur.tenant_id = #{tenantId}
+              AND ur.deleted = 0
+            ORDER BY ur.user_id
+            """)
+    List<Long> findUserIdsByPermission(@Param("tenantId") Long tenantId,
+                                       @Param("permCode") String permCode);
+
     @Update("""
             UPDATE users
             SET password_hash = #{passwordHash},

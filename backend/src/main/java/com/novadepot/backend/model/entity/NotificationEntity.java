@@ -19,7 +19,9 @@ public class NotificationEntity extends BaseEntity {
     private Long receiverUserId;
     private String title;
     private String content;
+    private String severity;
     private Integer readFlag;
     private LocalDateTime sentAt;
     private LocalDateTime readAt;
+    private String jumpPath;
 }

@@ -30,6 +30,8 @@ const router = createRouter({
         { path: "erp/purchases", component: () => import("@/pages/erp/PurchasePage.vue"), meta: { requiredPermission: "PURCHASE_READ" } },
         { path: "erp/sales", component: () => import("@/pages/erp/SalesPage.vue"), meta: { requiredPermission: "SALES_READ" } },
         { path: "erp/finance", component: () => import("@/pages/erp/FinancePage.vue"), meta: { requiredAnyPermissions: ["FINANCE_PAYABLE_READ", "FINANCE_RECEIVABLE_READ"] } },
+        { path: "notifications", component: () => import("@/pages/NotificationsPage.vue"), meta: { requiredPermission: "NOTIFY_READ" } },
+        { path: "reports", component: () => import("@/pages/ReportsPage.vue"), meta: { requiredPermission: "REPORT_CENTER_READ" } },
         { path: "ai/enterprise", component: () => import("@/pages/ai/AiAssistantPage.vue"), meta: { requiredPermission: "AI_CHAT" } },
         { path: "ai/usage-logs", component: () => import("@/pages/ai/AiUsageLogPage.vue"), meta: { requiredPermission: "AI_USAGE_LOG_VIEW" } },
         { path: "agent/center", component: () => import("@/pages/agent/AgentCenterPage.vue"), meta: { requiredPermission: "AGENT_TASK_READ" } },
@@ -91,6 +93,7 @@ router.beforeEach(async (to) => {
 
 function resolvePreferredPath(authStore: ReturnType<typeof useAuthStore>) {
   if (authStore.hasPermission("REPORT_DASHBOARD_READ")) return "/dashboard";
+  if (authStore.hasPermission("NOTIFY_READ")) return "/notifications";
   if (authStore.hasPermission("INBOUND_READ")) return "/wms/inbound";
   if (authStore.hasPermission("OUTBOUND_READ")) return "/wms/outbound";
   if (authStore.hasPermission("STOCKTAKE_READ")) return "/wms/stock-take";

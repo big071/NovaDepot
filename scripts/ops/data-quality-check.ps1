@@ -428,6 +428,71 @@ select
   if ($aiToolLogInconsistent -gt 0) { throw "v1.2 sprint3 AI tool log inconsistent rows found: $aiToolLogInconsistent" }
   Write-Host "v1.2 sprint3 AI tool call consistency passed"
 
+  Write-Host "[data-quality] v1.2 sprint4 notification/report/audit consistency"
+  $sprint4ColumnCount = [int](Query-Scalar @"
+select count(*)
+from information_schema.columns
+where table_schema = database()
+  and table_name = 'notifications'
+  and column_name in ('severity','jump_path');
+"@)
+  if ($sprint4ColumnCount -ne 2) { throw "notifications sprint4 columns missing" }
+
+  $sprint4IndexCount = [int](Query-Scalar @"
+select count(*)
+from information_schema.statistics
+where table_schema = database()
+  and table_name = 'notifications'
+  and index_name = 'idx_notify_biz_receiver';
+"@)
+  if ($sprint4IndexCount -lt 1) { throw "notifications idx_notify_biz_receiver missing" }
+
+  $sprint4NotificationInconsistent = [int](Query-Scalar @"
+select
+  (select count(*)
+     from notifications n
+     left join users u
+       on u.id = n.receiver_user_id
+      and u.tenant_id = n.tenant_id
+      and u.deleted = 0
+    where n.tenant_id = 1
+      and n.deleted = 0
+      and u.id is null) +
+  (select count(*)
+     from notifications
+    where tenant_id = 1
+      and deleted = 0
+      and ((read_flag = 1 and read_at is null) or (read_flag = 0 and read_at is not null))) +
+  (select count(*)
+     from notifications
+    where tenant_id = 1
+      and deleted = 0
+      and jump_path is not null
+      and jump_path <> ''
+      and jump_path not like '/%') +
+  (select count(*)
+     from (
+       select tenant_id, biz_type, biz_no, receiver_user_id, notify_type, count(*) cnt
+         from notifications
+        where tenant_id = 1
+          and deleted = 0
+          and notify_type in ('LOW_STOCK_PATROL','ORDER_OVERDUE_PATROL','TICKET_OVERDUE_PATROL')
+        group by tenant_id, biz_type, biz_no, receiver_user_id, notify_type
+       having count(*) > 1
+     ) d);
+"@)
+  if ($sprint4NotificationInconsistent -gt 0) { throw "v1.2 sprint4 notification inconsistent rows found: $sprint4NotificationInconsistent" }
+
+  $reportInventory = Invoke-RestMethod -Method Get -Uri "http://localhost:18080/api/v1/reports/inventory-turnover" -Headers $headers
+  Assert-SuccessCode $reportInventory "inventory-turnover"
+  $reportInout = Invoke-RestMethod -Method Get -Uri "http://localhost:18080/api/v1/reports/inout-summary" -Headers $headers
+  Assert-SuccessCode $reportInout "inout-summary"
+  $reportPurchaseSales = Invoke-RestMethod -Method Get -Uri "http://localhost:18080/api/v1/reports/purchase-sales-summary" -Headers $headers
+  Assert-SuccessCode $reportPurchaseSales "purchase-sales-summary"
+  $reportTicket = Invoke-RestMethod -Method Get -Uri "http://localhost:18080/api/v1/reports/ticket-efficiency" -Headers $headers
+  Assert-SuccessCode $reportTicket "ticket-efficiency"
+  Write-Host "v1.2 sprint4 notification/report/audit consistency passed"
+
   Write-Host "[data-quality] passed"
 } catch {
   Write-Error "[data-quality] failed: $($_.Exception.Message)"

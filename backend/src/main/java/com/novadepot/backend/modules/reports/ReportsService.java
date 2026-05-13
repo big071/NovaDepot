@@ -8,7 +8,11 @@ import com.novadepot.backend.model.entity.CustomerServiceSessionEntity;
 import com.novadepot.backend.model.entity.CustomerServiceTicketEntity;
 import com.novadepot.backend.model.entity.InboundOrderEntity;
 import com.novadepot.backend.model.entity.InventoryEntity;
+import com.novadepot.backend.model.entity.InventoryTransactionEntity;
 import com.novadepot.backend.model.entity.OutboundOrderEntity;
+import com.novadepot.backend.model.entity.PurchaseOrderEntity;
+import com.novadepot.backend.model.entity.SalesOrderEntity;
+import com.novadepot.backend.modules.auditlogs.AuditLogRecordService;
 import com.novadepot.backend.modules.inventory.LowStockPolicyService;
 import com.novadepot.backend.repository.AuditLogMapper;
 import com.novadepot.backend.repository.AuthQueryMapper;
@@ -17,16 +21,27 @@ import com.novadepot.backend.repository.CustomerServiceSessionMapper;
 import com.novadepot.backend.repository.CustomerServiceTicketMapper;
 import com.novadepot.backend.repository.InboundOrderMapper;
 import com.novadepot.backend.repository.InventoryMapper;
+import com.novadepot.backend.repository.InventoryTransactionMapper;
 import com.novadepot.backend.repository.OutboundOrderMapper;
 import com.novadepot.backend.repository.ProductMapper;
+import com.novadepot.backend.repository.PurchaseOrderMapper;
+import com.novadepot.backend.repository.SalesOrderMapper;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.WeekFields;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.StringJoiner;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class ReportsService {
@@ -34,33 +49,45 @@ public class ReportsService {
     private final InventoryMapper inventoryMapper;
     private final InboundOrderMapper inboundOrderMapper;
     private final OutboundOrderMapper outboundOrderMapper;
+    private final InventoryTransactionMapper inventoryTransactionMapper;
+    private final PurchaseOrderMapper purchaseOrderMapper;
+    private final SalesOrderMapper salesOrderMapper;
     private final LowStockPolicyService lowStockPolicyService;
     private final AuthQueryMapper authQueryMapper;
     private final AuditLogMapper auditLogMapper;
     private final CustomerServiceSessionMapper customerServiceSessionMapper;
     private final CustomerServiceTicketMapper customerServiceTicketMapper;
     private final CustomerServiceMessageMapper customerServiceMessageMapper;
+    private final AuditLogRecordService auditLogRecordService;
 
     public ReportsService(ProductMapper productMapper,
                           InventoryMapper inventoryMapper,
                           InboundOrderMapper inboundOrderMapper,
                           OutboundOrderMapper outboundOrderMapper,
+                          InventoryTransactionMapper inventoryTransactionMapper,
+                          PurchaseOrderMapper purchaseOrderMapper,
+                          SalesOrderMapper salesOrderMapper,
                           LowStockPolicyService lowStockPolicyService,
                           AuthQueryMapper authQueryMapper,
                           AuditLogMapper auditLogMapper,
                           CustomerServiceSessionMapper customerServiceSessionMapper,
                           CustomerServiceTicketMapper customerServiceTicketMapper,
-                          CustomerServiceMessageMapper customerServiceMessageMapper) {
+                          CustomerServiceMessageMapper customerServiceMessageMapper,
+                          AuditLogRecordService auditLogRecordService) {
         this.productMapper = productMapper;
         this.inventoryMapper = inventoryMapper;
         this.inboundOrderMapper = inboundOrderMapper;
         this.outboundOrderMapper = outboundOrderMapper;
+        this.inventoryTransactionMapper = inventoryTransactionMapper;
+        this.purchaseOrderMapper = purchaseOrderMapper;
+        this.salesOrderMapper = salesOrderMapper;
         this.lowStockPolicyService = lowStockPolicyService;
         this.authQueryMapper = authQueryMapper;
         this.auditLogMapper = auditLogMapper;
         this.customerServiceSessionMapper = customerServiceSessionMapper;
         this.customerServiceTicketMapper = customerServiceTicketMapper;
         this.customerServiceMessageMapper = customerServiceMessageMapper;
+        this.auditLogRecordService = auditLogRecordService;
     }
 
     public Map<String, Object> dashboard() {
@@ -179,4 +206,170 @@ public class ReportsService {
         if (normalized.contains("CS_AGENT")) return "cs_ops";
         return "observer";
     }
+
+    public Map<String, Object> inventoryTurnover(String dateFrom, String dateTo, Long warehouseId) {
+        DateRange range = parseRange(dateFrom, dateTo);
+        List<InventoryTransactionEntity> txns = inventoryTransactionMapper.selectList(new LambdaQueryWrapper<InventoryTransactionEntity>()
+                .eq(InventoryTransactionEntity::getTenantId, RequestContext.tenantId())
+                .eq(warehouseId != null, InventoryTransactionEntity::getWarehouseId, warehouseId)
+                .ge(InventoryTransactionEntity::getOccurredAt, range.start())
+                .lt(InventoryTransactionEntity::getOccurredAt, range.end()));
+        Map<Long, BigDecimal> outboundQty = txns.stream()
+                .filter(txn -> "OUTBOUND_SHIP".equalsIgnoreCase(String.valueOf(txn.getBizType())) || (txn.getChangeQty() != null && txn.getChangeQty().signum() < 0))
+                .collect(Collectors.groupingBy(InventoryTransactionEntity::getProductId, LinkedHashMap::new,
+                        Collectors.reducing(BigDecimal.ZERO, txn -> abs(txn.getChangeQty()), BigDecimal::add)));
+        Map<Long, BigDecimal> stockQty = inventoryMapper.selectList(new LambdaQueryWrapper<InventoryEntity>()
+                        .eq(InventoryEntity::getTenantId, RequestContext.tenantId())
+                        .eq(warehouseId != null, InventoryEntity::getWarehouseId, warehouseId))
+                .stream()
+                .collect(Collectors.groupingBy(InventoryEntity::getProductId, LinkedHashMap::new,
+                        Collectors.reducing(BigDecimal.ZERO, row -> value(row.getAvailableQty()), BigDecimal::add)));
+        Set<Long> productIds = new java.util.HashSet<>();
+        productIds.addAll(outboundQty.keySet());
+        productIds.addAll(stockQty.keySet());
+        Map<Long, String> productNames = productMapper.selectBatchIds(productIds).stream()
+                .filter(com.novadepot.backend.model.entity.ProductEntity.class::isInstance)
+                .map(com.novadepot.backend.model.entity.ProductEntity.class::cast)
+                .collect(Collectors.toMap(com.novadepot.backend.model.entity.ProductEntity::getId, p -> p.getProductCode() + " / " + p.getProductName(), (a, b) -> a));
+        List<Map<String, Object>> rows = productIds.stream().map(id -> {
+            BigDecimal outbound = outboundQty.getOrDefault(id, BigDecimal.ZERO);
+            BigDecimal stock = stockQty.getOrDefault(id, BigDecimal.ZERO);
+            BigDecimal turnover = stock.signum() == 0 ? BigDecimal.ZERO : outbound.divide(stock, 4, java.math.RoundingMode.HALF_UP);
+            return row("productId", id, "productName", productNames.getOrDefault(id, String.valueOf(id)), "outboundQty", outbound, "availableQty", stock, "turnoverRate", turnover);
+        }).sorted(Comparator.comparing(item -> String.valueOf(item.get("productName")))).toList();
+        return report("inventoryTurnover", range, rows);
+    }
+
+    public Map<String, Object> inoutSummary(String dateFrom, String dateTo, String grain) {
+        DateRange range = parseRange(dateFrom, dateTo);
+        boolean week = "WEEK".equalsIgnoreCase(grain);
+        List<InboundOrderEntity> inbound = inboundOrderMapper.selectList(new LambdaQueryWrapper<InboundOrderEntity>()
+                .eq(InboundOrderEntity::getTenantId, RequestContext.tenantId()).ge(InboundOrderEntity::getCreatedAt, range.start()).lt(InboundOrderEntity::getCreatedAt, range.end()));
+        List<OutboundOrderEntity> outbound = outboundOrderMapper.selectList(new LambdaQueryWrapper<OutboundOrderEntity>()
+                .eq(OutboundOrderEntity::getTenantId, RequestContext.tenantId()).ge(OutboundOrderEntity::getCreatedAt, range.start()).lt(OutboundOrderEntity::getCreatedAt, range.end()));
+        Map<String, Long> inboundMap = inbound.stream().collect(Collectors.groupingBy(row -> bucket(row.getCreatedAt(), week), LinkedHashMap::new, Collectors.counting()));
+        Map<String, Long> outboundMap = outbound.stream().collect(Collectors.groupingBy(row -> bucket(row.getCreatedAt(), week), LinkedHashMap::new, Collectors.counting()));
+        Set<String> keys = new java.util.TreeSet<>();
+        keys.addAll(inboundMap.keySet());
+        keys.addAll(outboundMap.keySet());
+        List<Map<String, Object>> rows = keys.stream().map(k -> row("period", k, "inboundCount", inboundMap.getOrDefault(k, 0L), "outboundCount", outboundMap.getOrDefault(k, 0L), "netCount", inboundMap.getOrDefault(k, 0L) - outboundMap.getOrDefault(k, 0L))).toList();
+        return report("inoutSummary", range, rows);
+    }
+
+    public Map<String, Object> purchaseSalesSummary(String dateFrom, String dateTo, Long partnerId) {
+        DateRange range = parseRange(dateFrom, dateTo);
+        List<PurchaseOrderEntity> purchases = purchaseOrderMapper.selectList(new LambdaQueryWrapper<PurchaseOrderEntity>()
+                .eq(PurchaseOrderEntity::getTenantId, RequestContext.tenantId())
+                .eq(partnerId != null, PurchaseOrderEntity::getPartnerId, partnerId)
+                .ge(PurchaseOrderEntity::getCreatedAt, range.start()).lt(PurchaseOrderEntity::getCreatedAt, range.end()));
+        List<SalesOrderEntity> sales = salesOrderMapper.selectList(new LambdaQueryWrapper<SalesOrderEntity>()
+                .eq(SalesOrderEntity::getTenantId, RequestContext.tenantId())
+                .eq(partnerId != null, SalesOrderEntity::getPartnerId, partnerId)
+                .ge(SalesOrderEntity::getCreatedAt, range.start()).lt(SalesOrderEntity::getCreatedAt, range.end()));
+        BigDecimal purchaseAmount = purchases.stream().map(PurchaseOrderEntity::getTotalAmount).map(this::value).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal salesAmount = sales.stream().map(SalesOrderEntity::getTotalAmount).map(this::value).reduce(BigDecimal.ZERO, BigDecimal::add);
+        List<Map<String, Object>> rows = List.of(
+                row("type", "采购", "count", purchases.size(), "amount", purchaseAmount),
+                row("type", "销售", "count", sales.size(), "amount", salesAmount),
+                row("type", "净额", "count", sales.size() - purchases.size(), "amount", salesAmount.subtract(purchaseAmount))
+        );
+        return report("purchaseSalesSummary", range, rows);
+    }
+
+    public Map<String, Object> ticketEfficiency(String dateFrom, String dateTo, Long assigneeId) {
+        DateRange range = parseRange(dateFrom, dateTo);
+        List<CustomerServiceTicketEntity> tickets = customerServiceTicketMapper.selectList(new LambdaQueryWrapper<CustomerServiceTicketEntity>()
+                .eq(CustomerServiceTicketEntity::getTenantId, RequestContext.tenantId())
+                .eq(assigneeId != null, CustomerServiceTicketEntity::getAssigneeUserId, assigneeId)
+                .ge(CustomerServiceTicketEntity::getCreatedAt, range.start()).lt(CustomerServiceTicketEntity::getCreatedAt, range.end()));
+        Map<Long, List<CustomerServiceTicketEntity>> grouped = tickets.stream().collect(Collectors.groupingBy(t -> t.getAssigneeUserId() == null ? 0L : t.getAssigneeUserId(), LinkedHashMap::new, Collectors.toList()));
+        List<Map<String, Object>> rows = grouped.entrySet().stream().map(entry -> {
+            long total = entry.getValue().size();
+            long closed = entry.getValue().stream().filter(t -> Set.of("CLOSED", "RESOLVED").contains(String.valueOf(t.getStatus()).toUpperCase())).count();
+            return row("assigneeId", entry.getKey(), "ticketCount", total, "closedCount", closed, "closeRate", total == 0 ? BigDecimal.ZERO : BigDecimal.valueOf(closed).divide(BigDecimal.valueOf(total), 4, java.math.RoundingMode.HALF_UP));
+        }).toList();
+        return report("ticketEfficiency", range, rows);
+    }
+
+    public String inventoryTurnoverCsv(String dateFrom, String dateTo, Long warehouseId) {
+        auditExport("INVENTORY_TURNOVER");
+        return csv((List<Map<String, Object>>) inventoryTurnover(dateFrom, dateTo, warehouseId).get("rows"));
+    }
+
+    public String inoutSummaryCsv(String dateFrom, String dateTo, String grain) {
+        auditExport("INOUT_SUMMARY");
+        return csv((List<Map<String, Object>>) inoutSummary(dateFrom, dateTo, grain).get("rows"));
+    }
+
+    public String purchaseSalesSummaryCsv(String dateFrom, String dateTo, Long partnerId) {
+        auditExport("PURCHASE_SALES_SUMMARY");
+        return csv((List<Map<String, Object>>) purchaseSalesSummary(dateFrom, dateTo, partnerId).get("rows"));
+    }
+
+    public String ticketEfficiencyCsv(String dateFrom, String dateTo, Long assigneeId) {
+        auditExport("TICKET_EFFICIENCY");
+        return csv((List<Map<String, Object>>) ticketEfficiency(dateFrom, dateTo, assigneeId).get("rows"));
+    }
+
+    private Map<String, Object> report(String name, DateRange range, List<Map<String, Object>> rows) {
+        return Map.of("reportName", name, "dateFrom", range.start().toLocalDate().toString(), "dateTo", range.end().minusDays(1).toLocalDate().toString(), "rows", rows, "total", rows.size());
+    }
+
+    private DateRange parseRange(String dateFrom, String dateTo) {
+        LocalDate to = StringUtils.hasText(dateTo) ? LocalDate.parse(dateTo) : LocalDate.now();
+        LocalDate from = StringUtils.hasText(dateFrom) ? LocalDate.parse(dateFrom) : to.minusDays(6);
+        return new DateRange(from.atStartOfDay(), to.plusDays(1).atStartOfDay());
+    }
+
+    private String bucket(LocalDateTime time, boolean week) {
+        if (time == null) return "-";
+        LocalDate date = time.toLocalDate();
+        if (!week) return date.toString();
+        int weekNo = date.get(WeekFields.ISO.weekOfWeekBasedYear());
+        return date.getYear() + "-W" + String.format("%02d", weekNo);
+    }
+
+    private BigDecimal value(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
+    }
+
+    private BigDecimal abs(BigDecimal value) {
+        return value(value).abs();
+    }
+
+    private Map<String, Object> row(Object... pairs) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        for (int i = 0; i + 1 < pairs.length; i += 2) {
+            map.put(String.valueOf(pairs[i]), pairs[i + 1]);
+        }
+        return map;
+    }
+
+    private String csv(List<Map<String, Object>> rows) {
+        if (rows == null || rows.isEmpty()) {
+            return "\uFEFF暂无数据\n";
+        }
+        List<String> headers = new ArrayList<>(rows.get(0).keySet());
+        StringBuilder sb = new StringBuilder("\uFEFF");
+        sb.append(String.join(",", headers)).append("\n");
+        for (Map<String, Object> row : rows) {
+            StringJoiner joiner = new StringJoiner(",");
+            for (String header : headers) {
+                joiner.add(escape(row.get(header)));
+            }
+            sb.append(joiner).append("\n");
+        }
+        return sb.toString();
+    }
+
+    private String escape(Object raw) {
+        String text = raw == null ? "" : String.valueOf(raw);
+        return "\"" + text.replace("\"", "\"\"") + "\"";
+    }
+
+    private void auditExport(String reportCode) {
+        auditLogRecordService.record("REPORT", "EXPORT", "REPORT", reportCode, reportCode, null, "{\"report\":\"" + reportCode + "\"}");
+    }
+
+    private record DateRange(LocalDateTime start, LocalDateTime end) {}
 }

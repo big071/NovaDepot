@@ -67,6 +67,18 @@ app:
       api-key: ${AI_DEEPSEEK_API_KEY:}
       chat-model: ${AI_DEEPSEEK_CHAT_MODEL:deepseek-chat}
       reasoner-model: ${AI_DEEPSEEK_REASONER_MODEL:deepseek-reasoner}
+  agent:
+    patrol:
+      enabled: ${APP_AGENT_PATROL_ENABLED:true}
+      low-stock-cron: "${APP_AGENT_LOW_STOCK_CRON:0 0 * * * ?}"
+      order-overdue-cron: "${APP_AGENT_ORDER_OVERDUE_CRON:0 0 */4 * * ?}"
+      ticket-overdue-cron: "${APP_AGENT_TICKET_OVERDUE_CRON:0 0 * * * ?}"
+      order-overdue-hours: ${APP_AGENT_ORDER_OVERDUE_HOURS:24}
+      ticket-overdue-hours: ${APP_AGENT_TICKET_OVERDUE_HOURS:4}
+  audit:
+    cleanup-enabled: ${APP_AUDIT_CLEANUP_ENABLED:true}
+    cleanup-cron: "${APP_AUDIT_CLEANUP_CRON:0 30 2 * * ?}"
+    retention-days: ${APP_AUDIT_RETENTION_DAYS:90}
 
 springdoc:
   api-docs:
