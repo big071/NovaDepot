@@ -136,7 +136,32 @@
           <div v-for="(item, index) in activeMessages" :key="index"
             class="max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-6"
             :class="item.role === 'user' ? 'ml-auto bg-primary text-white shadow-sm' : 'border border-border bg-surface text-text-primary'">
+            <div v-if="item.role === 'assistant' && item.toolCalls?.length" class="mb-2 space-y-2">
+              <article v-for="tool in item.toolCalls" :key="`${tool.toolName}-${tool.status}`"
+                class="rounded-lg border border-border bg-bg/60 p-2 text-xs text-text-secondary">
+                <div class="flex items-center justify-between gap-2">
+                  <p class="font-medium text-text-primary">{{ tool.displayName || tool.toolName }}</p>
+                  <n-tag size="small" :bordered="false" :type="toolStatusType(tool)">
+                    {{ toolStatusLabel(tool) }}
+                  </n-tag>
+                </div>
+                <p v-if="tool.argumentsSummary" class="mt-1">条件：{{ tool.argumentsSummary }}</p>
+                <p v-if="tool.summary" class="mt-1">{{ tool.summary }}</p>
+                <div v-if="tool.sources?.length" class="mt-2 flex flex-wrap gap-1">
+                  <n-tag v-for="source in tool.sources.slice(0, 3)" :key="String(source.sourceId ?? source.bizNo ?? source.name)"
+                    size="small" :bordered="false" type="info">
+                    {{ sourceLabel(source) }}
+                  </n-tag>
+                </div>
+              </article>
+            </div>
             <p>{{ item.content }}</p>
+            <div v-if="item.role === 'assistant' && item.validationWarnings?.length" class="mt-2 space-y-1 text-xs text-warning">
+              <p v-for="warning in item.validationWarnings" :key="warning">{{ warning }}</p>
+            </div>
+            <p v-if="item.role === 'assistant' && item.toolLimitReached" class="mt-2 text-xs text-warning">
+              已达到本轮最多 5 次工具调用限制。
+            </p>
             <p v-if="item.role === 'assistant' && item.status && item.status !== 'COMPLETED'"
               class="mt-1 text-xs text-text-secondary">
               {{ statusLabel(item.status) }}
@@ -166,10 +191,18 @@ import { computed, h, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { NAlert, NButton, NDataTable, NEmpty, NInput, NSelect, NTag, useMessage } from "naive-ui";
 import type { DataTableColumns } from "naive-ui";
-import { aiApi, streamAiChat, type AiConversation, type AiMessage, type AiStreamEvent } from "@/services/ai";
+import { aiApi, streamAiChat, type AiConversation, type AiMessage, type AiStreamEvent, type AiToolCallView } from "@/services/ai";
 import type { KnowledgeRef } from "@/services/knowledge";
 
-type ChatMessage = { role: "user" | "assistant"; content: string; status?: "PENDING" | "STREAMING" | "COMPLETED" | "FAILED" | "STOPPED" };
+type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+  status?: "PENDING" | "STREAMING" | "COMPLETED" | "FAILED" | "STOPPED";
+  toolCalls?: ToolCallMessage[];
+  validationWarnings?: string[];
+  toolLimitReached?: boolean;
+};
+type ToolCallMessage = AiToolCallView & { status?: "CALLING" | "SUCCESS" | "DENIED" | "EMPTY" | "FAILED" };
 type SummaryCard = { title: string; value: string };
 
 const uiMessage = useMessage();
@@ -492,7 +525,7 @@ async function sendMessage() {
     messageMap.value[optimisticConversationNo] = [];
   }
   messageMap.value[optimisticConversationNo].push({ role: "user", content });
-  messageMap.value[optimisticConversationNo].push({ role: "assistant", content: "", status: "STREAMING" });
+  messageMap.value[optimisticConversationNo].push({ role: "assistant", content: "", status: "STREAMING", toolCalls: [], validationWarnings: [] });
 
   sending.value = true;
   const requestId = crypto.randomUUID();
@@ -538,8 +571,36 @@ function handleStreamEvent(event: AiStreamEvent, optimisticConversationNo: strin
   } else if (event.event === "status") {
     streamStatusText.value = String(event.data.message ?? statusLabel(String(event.data.status ?? "STREAMING")));
     if (event.data.status === "STOPPED") markLastAssistant(conversationNo, "STOPPED");
+  } else if (event.event === "tool_start") {
+    upsertToolCall(conversationNo, { ...event.data, status: "CALLING" });
+  } else if (event.event === "tool_result") {
+    const status = event.data.permissionResult === "DENIED"
+      ? "DENIED"
+      : event.data.success === false
+        ? "FAILED"
+        : event.data.empty
+          ? "EMPTY"
+          : "SUCCESS";
+    upsertToolCall(conversationNo, { ...event.data, status });
+  } else if (event.event === "tool_error") {
+    upsertToolCall(conversationNo, { ...event.data, summary: event.data.message || event.data.summary, status: "FAILED" });
+  } else if (event.event === "validation_warning") {
+    appendValidationWarning(conversationNo, event.data.message || "回答已进行工具结果一致性校验。");
+  } else if (event.event === "tool_limit") {
+    markToolLimit(conversationNo, event.data.message);
   } else if (event.event === "done") {
     markLastAssistant(conversationNo, String(event.data.status ?? "COMPLETED") as ChatMessage["status"]);
+    const doneToolCalls = event.data.toolCalls;
+    if (Array.isArray(doneToolCalls)) {
+      setToolCalls(conversationNo, doneToolCalls as ChatMessage["toolCalls"]);
+    }
+    const warnings = event.data.validationWarnings;
+    if (Array.isArray(warnings)) {
+      setValidationWarnings(conversationNo, warnings.map((item) => String(item)));
+    }
+    if (event.data.toolLimitReached) {
+      markToolLimit(conversationNo);
+    }
     if (event.data.fallbackFrom) {
       streamStatusText.value = `DeepSeek 不可用，已从 ${event.data.fallbackFrom} 降级完成。`;
     }
@@ -562,6 +623,13 @@ async function sendNonStreamingFallback(normalizedMessage: string, optimisticCon
     }
     await loadConversations();
     await loadConversationMessages(resp.conversationNo);
+    const list = messageMap.value[resp.conversationNo] ?? [];
+    const last = [...list].reverse().find((item) => item.role === "assistant");
+    if (last) {
+      last.toolCalls = resp.toolCalls ?? [];
+      last.validationWarnings = resp.validationWarnings ?? [];
+      last.toolLimitReached = Boolean(resp.toolLimitReached);
+    }
     lastKnowledgeRefs.value = resp.knowledgeRefs || [];
     lastKnowledgeNotice.value = resp.knowledgeFallbackNotice || "";
   } catch (error) {
@@ -596,6 +664,70 @@ function markLastAssistant(conversationNo: string, status: ChatMessage["status"]
   if (last) {
     last.status = status;
   }
+}
+
+function lastAssistant(conversationNo: string) {
+  const list = messageMap.value[conversationNo] ?? [];
+  return [...list].reverse().find((item) => item.role === "assistant");
+}
+
+function upsertToolCall(conversationNo: string, tool: Partial<ToolCallMessage>) {
+  const last = lastAssistant(conversationNo);
+  if (!last || !tool.toolName) return;
+  const existing = last.toolCalls ?? [];
+  const index = existing.findIndex((item) => item.toolName === tool.toolName);
+  if (index >= 0) {
+    existing[index] = { ...existing[index], ...tool } as ToolCallMessage;
+  } else {
+    existing.push(tool as ToolCallMessage);
+  }
+  last.toolCalls = existing;
+}
+
+function setToolCalls(conversationNo: string, toolCalls: ChatMessage["toolCalls"]) {
+  const last = lastAssistant(conversationNo);
+  if (last) last.toolCalls = toolCalls ?? [];
+}
+
+function appendValidationWarning(conversationNo: string, warning: string) {
+  const last = lastAssistant(conversationNo);
+  if (!last) return;
+  last.validationWarnings = [...(last.validationWarnings ?? []), warning];
+}
+
+function setValidationWarnings(conversationNo: string, warnings: string[]) {
+  const last = lastAssistant(conversationNo);
+  if (last) last.validationWarnings = warnings;
+}
+
+function markToolLimit(conversationNo: string, message?: string) {
+  const last = lastAssistant(conversationNo);
+  if (!last) return;
+  last.toolLimitReached = true;
+  if (message) appendValidationWarning(conversationNo, message);
+}
+
+function toolStatusLabel(tool: ToolCallMessage) {
+  if (tool.status === "CALLING") return "调用中";
+  if (tool.permissionResult === "DENIED" || tool.status === "DENIED") return "无权限";
+  if (tool.status === "FAILED" || tool.success === false) return "失败";
+  if (tool.empty || tool.status === "EMPTY") return "无结果";
+  return "成功";
+}
+
+function toolStatusType(tool: ToolCallMessage) {
+  if (tool.status === "CALLING") return "info";
+  if (tool.permissionResult === "DENIED" || tool.status === "DENIED") return "warning";
+  if (tool.status === "FAILED" || tool.success === false) return "error";
+  if (tool.empty || tool.status === "EMPTY") return "default";
+  return "success";
+}
+
+function sourceLabel(source: Record<string, unknown>) {
+  const main = source.bizNo ?? source.name ?? source.productName ?? source.sourceId ?? "-";
+  const status = source.status ? ` / ${source.status}` : "";
+  const qty = source.quantity ?? source.availableQty;
+  return `${main}${status}${qty === undefined ? "" : ` / ${qty}`}`;
 }
 
 function statusLabel(status: string) {

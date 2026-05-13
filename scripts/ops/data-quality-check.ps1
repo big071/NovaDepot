@@ -391,6 +391,43 @@ select
   if ($aiSprint2Inconsistent -gt 0) { throw "v1.2 sprint2 AI inconsistent rows found: $aiSprint2Inconsistent" }
   Write-Host "v1.2 sprint2 AI streaming/session consistency passed"
 
+  Write-Host "[data-quality] v1.2 sprint3 AI tool call consistency"
+  $aiToolLogTableExists = [int](Query-Scalar "select count(*) from information_schema.tables where table_schema = database() and table_name = 'ai_tool_call_logs';")
+  if ($aiToolLogTableExists -ne 1) { throw "ai_tool_call_logs table missing" }
+  $aiToolLogInconsistent = [int](Query-Scalar @"
+select
+  (select count(*)
+     from ai_tool_call_logs
+    where tenant_id = 1
+      and (tool_name is null or tool_name = ''
+        or success not in (0, 1)
+        or permission_result not in ('ALLOWED','DENIED','UNKNOWN_TOOL')
+        or duration_ms is null
+        or result_count is null
+        or char_length(coalesce(arguments_summary, '')) > 512
+        or arguments_summary like '%sk-%')) +
+  (select count(*)
+     from ai_tool_call_logs l
+     left join ai_conversations c
+       on c.id = l.conversation_id
+      and c.tenant_id = l.tenant_id
+      and c.deleted = 0
+    where l.tenant_id = 1
+      and l.conversation_id is not null
+      and c.id is null) +
+  (select count(*)
+     from ai_tool_call_logs l
+     left join ai_messages m
+       on m.id = l.message_id
+      and m.tenant_id = l.tenant_id
+      and m.deleted = 0
+    where l.tenant_id = 1
+      and l.message_id is not null
+      and m.id is null);
+"@)
+  if ($aiToolLogInconsistent -gt 0) { throw "v1.2 sprint3 AI tool log inconsistent rows found: $aiToolLogInconsistent" }
+  Write-Host "v1.2 sprint3 AI tool call consistency passed"
+
   Write-Host "[data-quality] passed"
 } catch {
   Write-Error "[data-quality] failed: $($_.Exception.Message)"

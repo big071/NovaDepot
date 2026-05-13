@@ -103,3 +103,5 @@
 |---|---|---|
 | 93 | [v1.2 Sprint 1 Plan](93-v1.2-sprint1-plan.md) | DeepSeek 非流式基础接入、Provider 降级、用量日志和权限 |
 | 95 | [v1.2 Progress Tracker](95-v1.2-progress-tracker.md) | v1.2 Sprint 进度、限制和下一步 |
+| 96 | [v1.2 Sprint 2 Streaming Context Plan](96-v1.2-sprint2-streaming-context-plan.md) | Streaming output, stop generation, context window, and conversation archive |
+| 97 | [v1.2 Sprint 3 Function Calling Plan](97-v1.2-sprint3-function-calling-plan.md) | Read-only Function Calling tools, RBAC, audit, evidence display, and verification |

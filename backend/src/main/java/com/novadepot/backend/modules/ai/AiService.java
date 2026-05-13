@@ -12,6 +12,8 @@ import com.novadepot.backend.model.entity.AIPromptTemplateEntity;
 import com.novadepot.backend.model.entity.AuditLogEntity;
 import com.novadepot.backend.model.entity.AiUsageLogEntity;
 import com.novadepot.backend.modules.ai.provider.AiProvider;
+import com.novadepot.backend.modules.ai.tools.AiFunctionCallingOrchestrator;
+import com.novadepot.backend.modules.ai.tools.AiFunctionCallingResult;
 import com.novadepot.backend.modules.knowledge.KnowledgeService;
 import com.novadepot.backend.repository.AIConversationMapper;
 import com.novadepot.backend.repository.AIMessageMapper;
@@ -46,6 +48,7 @@ public class AiService {
     private final AiUsageLogMapper usageLogMapper;
     private final AuditLogMapper auditLogMapper;
     private final AiStreamRegistry streamRegistry;
+    private final AiFunctionCallingOrchestrator functionCallingOrchestrator;
     private final ObjectMapper objectMapper;
     private final String defaultProvider;
     private final boolean paidEnabled;
@@ -58,6 +61,7 @@ public class AiService {
                      AiUsageLogMapper usageLogMapper,
                      AuditLogMapper auditLogMapper,
                      AiStreamRegistry streamRegistry,
+                     AiFunctionCallingOrchestrator functionCallingOrchestrator,
                      ObjectMapper objectMapper,
                      @Value("${app.ai.provider:rule}") String defaultProvider,
                      @Value("${app.ai.paid-enabled:false}") boolean paidEnabled) {
@@ -69,6 +73,7 @@ public class AiService {
         this.usageLogMapper = usageLogMapper;
         this.auditLogMapper = auditLogMapper;
         this.streamRegistry = streamRegistry;
+        this.functionCallingOrchestrator = functionCallingOrchestrator;
         this.objectMapper = objectMapper;
         this.defaultProvider = defaultProvider;
         this.paidEnabled = paidEnabled;
@@ -122,6 +127,11 @@ public class AiService {
         int latencyMs = (int) (System.currentTimeMillis() - started);
 
         String reply = String.valueOf(providerResp.getOrDefault("reply", "系统繁忙，请稍后重试。"));
+        AiFunctionCallingResult toolResult = functionCallingOrchestrator.run(
+                userMessage, context, providerResp, conversation.getId(), null, "sync-" + System.currentTimeMillis());
+        if (toolResult.usedTools()) {
+            reply = toolResult.reply();
+        }
         BigDecimal confidence = toBigDecimal(providerResp.get("confidence"));
         Integer tokens = toInteger(providerResp.get("tokens"));
         String errorCode = fallbackFrom == null ? null : "AI_PROVIDER_FALLBACK";
@@ -156,6 +166,9 @@ public class AiService {
         if (providerResp.containsKey("usage")) {
             result.put("usage", providerResp.get("usage"));
         }
+        result.put("toolCalls", toolResult.toolCalls());
+        result.put("validationWarnings", toolResult.validationWarnings());
+        result.put("toolLimitReached", toolResult.toolLimitReached());
         result.put("knowledgeRefs", knowledgeRefs);
         result.put("knowledgeHit", !knowledgeRefs.isEmpty());
         result.put("knowledgeFallbackNotice", knowledgeRefs.isEmpty() ? "未命中知识库，当前回答来自规则或模拟提供者。" : "");
@@ -274,6 +287,7 @@ public class AiService {
         context.put("userId", RequestContext.userId());
         context.put("scene", scene);
         context.put("historyMessages", historyMessages);
+        functionCallingOrchestrator.prepareContext(context);
         context.put("stream", true);
 
         sendEvent(emitter, "meta", Map.of(
@@ -307,7 +321,27 @@ public class AiService {
             }
         }
 
+        AiFunctionCallingResult toolResult = functionCallingOrchestrator.run(
+                userMessage, context, providerResp, conversation.getId(), assistantMessage.getId(), requestId);
+        for (Map<String, Object> toolCall : toolResult.toolCalls()) {
+            sendEvent(emitter, "tool_start", Map.of(
+                    "toolName", toolCall.getOrDefault("toolName", ""),
+                    "displayName", toolCall.getOrDefault("displayName", ""),
+                    "argumentsSummary", toolCall.getOrDefault("argumentsSummary", "")
+            ));
+            sendEvent(emitter, "tool_result", toolCall);
+        }
+        for (String warning : toolResult.validationWarnings()) {
+            sendEvent(emitter, "validation_warning", Map.of("message", warning));
+        }
+        if (toolResult.toolLimitReached()) {
+            sendEvent(emitter, "tool_limit", Map.of("message", "已达到本轮最多 5 次工具调用限制"));
+        }
+
         String reply = String.valueOf(providerResp.getOrDefault("reply", ""));
+        if (toolResult.usedTools()) {
+            reply = toolResult.reply();
+        }
         StringBuilder streamed = new StringBuilder();
         boolean stopped = false;
         try {
@@ -344,6 +378,9 @@ public class AiService {
             if (fallbackFrom != null) {
                 done.put("fallbackFrom", fallbackFrom);
             }
+            done.put("toolCalls", toolResult.toolCalls());
+            done.put("validationWarnings", toolResult.validationWarnings());
+            done.put("toolLimitReached", toolResult.toolLimitReached());
             sendEvent(emitter, "done", done);
             emitter.complete();
         } catch (Exception ex) {

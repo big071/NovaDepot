@@ -12,6 +12,7 @@ public class AiProperties {
     private String provider = "deepseek-chat";
     private String model = "deepseek-chat";
     private boolean paidEnabled = false;
+    private boolean toolsEnabled = true;
     private String systemPrompt = "你是 NovaDepot 智能仓库管理系统的 AI 助手。你的职责包括帮助用户管理库存、采购、销售、入库、出库、工单、产品信息和往来单位。请用专业、简洁的中文回答问题。如果你不确定答案，请诚实告知并建议用户查阅相关资料。";
     private Duration connectTimeout = Duration.ofMillis(5000);
     private Duration readTimeout = Duration.ofMillis(30000);
@@ -69,6 +70,8 @@ public class AiProperties {
     public void setModel(String model) { this.model = model; }
     public boolean isPaidEnabled() { return paidEnabled; }
     public void setPaidEnabled(boolean paidEnabled) { this.paidEnabled = paidEnabled; }
+    public boolean isToolsEnabled() { return toolsEnabled; }
+    public void setToolsEnabled(boolean toolsEnabled) { this.toolsEnabled = toolsEnabled; }
     public String getSystemPrompt() { return systemPrompt; }
     public void setSystemPrompt(String systemPrompt) { this.systemPrompt = systemPrompt; }
     public Duration getConnectTimeout() { return connectTimeout; }

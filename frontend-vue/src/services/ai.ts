@@ -36,6 +36,18 @@ export interface AiConversation {
   lastActiveAt?: string;
 }
 
+export interface AiToolCallView {
+  toolName: string;
+  displayName?: string;
+  argumentsSummary?: string;
+  success?: boolean;
+  permissionResult?: "ALLOWED" | "DENIED" | "UNKNOWN_TOOL" | string;
+  empty?: boolean;
+  summary?: string;
+  sources?: Array<Record<string, unknown>>;
+  rows?: Array<Record<string, unknown>>;
+}
+
 export interface AiChatReply {
   conversationId: string;
   conversationNo: string;
@@ -59,6 +71,9 @@ export interface AiChatReply {
   knowledgeRefs?: KnowledgeRef[];
   knowledgeHit?: boolean;
   knowledgeFallbackNotice?: string;
+  toolCalls?: AiToolCallView[];
+  validationWarnings?: string[];
+  toolLimitReached?: boolean;
 }
 
 export interface AiMessage {
@@ -74,6 +89,11 @@ export type AiStreamEvent =
   | { event: "meta"; data: Record<string, unknown> }
   | { event: "token"; data: { content?: string } }
   | { event: "status"; data: Record<string, unknown> }
+  | { event: "tool_start"; data: Partial<AiToolCallView> }
+  | { event: "tool_result"; data: AiToolCallView }
+  | { event: "tool_error"; data: Partial<AiToolCallView> & { message?: string } }
+  | { event: "tool_limit"; data: { message?: string } }
+  | { event: "validation_warning"; data: { message?: string } }
   | { event: "done"; data: Record<string, unknown> }
   | { event: "error"; data: { message?: string } };
 

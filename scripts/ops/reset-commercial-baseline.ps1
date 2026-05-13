@@ -30,6 +30,13 @@ try {
   Run-SqlFile "backend/deploy/mysql/init/104-seed-knowledge-sprint3.sql"
   Run-SqlFile "backend/deploy/mysql/init/105-seed-v1.1-sprint2-wms-link.sql"
   Run-SqlFile "backend/deploy/mysql/init/106-seed-v1.1-sprint3-finance-stocktake.sql"
+  if (Test-Path "backend/deploy/mysql/init/109-schema-v1.2-sprint2-streaming-context.sql") {
+    Run-SqlFile "backend/deploy/mysql/init/109-schema-v1.2-sprint2-streaming-context.sql"
+  }
+  docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot -proot -e "drop table if exists ai_tool_call_logs;" novadepot
+  if (Test-Path "backend/deploy/mysql/init/110-schema-v1.2-sprint3-function-calling.sql") {
+    Run-SqlFile "backend/deploy/mysql/init/110-schema-v1.2-sprint3-function-calling.sql"
+  }
   Write-Host "[reset-commercial] done. Next: ./scripts/ops/release-checklist.ps1"
 } catch {
   Write-Error "[reset-commercial] failed: $($_.Exception.Message)"

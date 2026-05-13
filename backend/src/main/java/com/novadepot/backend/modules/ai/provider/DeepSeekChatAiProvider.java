@@ -80,13 +80,17 @@ public class DeepSeekChatAiProvider implements AiProvider {
         userMsg.put("content", message);
         messages.add(userMsg);
 
-        Map<String, Object> body = Map.of(
-                "model", aiProperties.getDeepseekChatModel(),
-                "messages", messages,
-                "stream", false,
-                "max_tokens", 2048,
-                "temperature", 0.7
-        );
+        Map<String, Object> body = new HashMap<>();
+        body.put("model", aiProperties.getDeepseekChatModel());
+        body.put("messages", messages);
+        body.put("stream", false);
+        body.put("max_tokens", 2048);
+        body.put("temperature", 0.7);
+        Object tools = context.get("aiTools");
+        if (tools instanceof List<?> list && !list.isEmpty()) {
+            body.put("tools", tools);
+            body.put("tool_choice", context.getOrDefault("toolChoice", "auto"));
+        }
 
         long started = System.currentTimeMillis();
         boolean success = true;
@@ -96,6 +100,7 @@ public class DeepSeekChatAiProvider implements AiProvider {
         Integer promptTokens = 0;
         Integer completionTokens = 0;
         Integer totalTokens = 0;
+        List<Map<String, Object>> toolCalls = new ArrayList<>();
 
         try {
             String responseJson = deepseekRestClient.post()
@@ -105,7 +110,20 @@ public class DeepSeekChatAiProvider implements AiProvider {
                     .body(String.class);
 
             JsonNode root = objectMapper.readTree(responseJson);
-            reply = root.path("choices").path(0).path("message").path("content").asText("");
+            JsonNode messageNode = root.path("choices").path(0).path("message");
+            reply = messageNode.path("content").asText("");
+            JsonNode toolCallNodes = messageNode.path("tool_calls");
+            if (toolCallNodes.isArray()) {
+                for (JsonNode node : toolCallNodes) {
+                    JsonNode fn = node.path("function");
+                    if (StringUtils.hasText(fn.path("name").asText())) {
+                        toolCalls.add(Map.of(
+                                "name", fn.path("name").asText(),
+                                "arguments", fn.path("arguments").asText("{}")
+                        ));
+                    }
+                }
+            }
             JsonNode usage = root.path("usage");
             if (!usage.isMissingNode()) {
                 promptTokens = usage.path("prompt_tokens").asInt(0);
@@ -126,21 +144,22 @@ public class DeepSeekChatAiProvider implements AiProvider {
 
         BigDecimal confidence = success ? BigDecimal.valueOf(0.88) : BigDecimal.valueOf(0.1);
 
-        return Map.of(
-                "reply", reply,
-                "scene", scene,
-                "provider", providerName(),
-                "confidence", confidence,
-                "model", aiProperties.getDeepseekChatModel(),
-                "tokens", totalTokens,
-                "usage", Map.of(
-                        "promptTokens", promptTokens,
-                        "completionTokens", completionTokens,
-                        "totalTokens", totalTokens,
-                        "latencyMs", latencyMs,
-                        "costEstimate", costEstimate
-                )
-        );
+        Map<String, Object> result = new HashMap<>();
+        result.put("reply", reply);
+        result.put("scene", scene);
+        result.put("provider", providerName());
+        result.put("confidence", confidence);
+        result.put("model", aiProperties.getDeepseekChatModel());
+        result.put("tokens", totalTokens);
+        result.put("toolCalls", toolCalls);
+        result.put("usage", Map.of(
+                "promptTokens", promptTokens,
+                "completionTokens", completionTokens,
+                "totalTokens", totalTokens,
+                "latencyMs", latencyMs,
+                "costEstimate", costEstimate
+        ));
+        return result;
     }
 
     @SuppressWarnings("unchecked")
