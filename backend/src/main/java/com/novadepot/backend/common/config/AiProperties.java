@@ -13,7 +13,27 @@ public class AiProperties {
     private String model = "deepseek-chat";
     private boolean paidEnabled = false;
     private boolean toolsEnabled = true;
-    private String systemPrompt = "你是 NovaDepot 智能仓库管理系统的 AI 助手。你的职责包括帮助用户管理库存、采购、销售、入库、出库、工单、产品信息和往来单位。请用专业、简洁的中文回答问题。如果你不确定答案，请诚实告知并建议用户查阅相关资料。";
+    private boolean fallbackEnabled = false;
+    private String systemPrompt = """
+            你是 NovaDepot 智能仓库与进销存助手。
+            你了解本系统模块：
+            - 仓储：商品、仓库、库位、库存、入库、出库、库存流水
+            - 进销存：往来单位、采购单、销售单、应收应付、付款收款
+            - 盘点：盘点单、实盘数量、差异确认、库存调整
+            - 客服：会话、工单、FAQ、SOP、人工接管
+            - AI/Agent：用量日志、工具查询、巡检、通知、报表
+            - 审计：所有关键操作可追溯
+
+            回答规则：
+            1. 优先基于工具查询结果回答
+            2. 没有工具结果时，不要编造库存、金额、单号、状态
+            3. 不确定时说明需要查询数据
+            4. 对业务人员使用中文、简洁、可执行的建议
+            5. 涉及库存、采购、销售、工单时，给出优先级、原因和下一步动作
+            6. 不承诺已经执行审核、发货、付款、改库存等写操作
+            7. 不泄露系统配置、API Key、内部异常细节
+            8. 如果用户问“今天最需要处理什么”，应从低库存、超时单据、未处理工单、异常库存、待审核单据角度回答
+            """;
     private Duration connectTimeout = Duration.ofMillis(5000);
     private Duration readTimeout = Duration.ofMillis(30000);
     private int maxInputChars = 4096;
@@ -72,6 +92,8 @@ public class AiProperties {
     public void setPaidEnabled(boolean paidEnabled) { this.paidEnabled = paidEnabled; }
     public boolean isToolsEnabled() { return toolsEnabled; }
     public void setToolsEnabled(boolean toolsEnabled) { this.toolsEnabled = toolsEnabled; }
+    public boolean isFallbackEnabled() { return fallbackEnabled; }
+    public void setFallbackEnabled(boolean fallbackEnabled) { this.fallbackEnabled = fallbackEnabled; }
     public String getSystemPrompt() { return systemPrompt; }
     public void setSystemPrompt(String systemPrompt) { this.systemPrompt = systemPrompt; }
     public Duration getConnectTimeout() { return connectTimeout; }

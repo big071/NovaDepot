@@ -22,6 +22,7 @@ export interface AiUsageLog {
   totalTokens: number;
   latencyMs: number;
   success: boolean;
+  errorCode?: string;
   errorMessage: string;
   createdAt: string;
 }
@@ -74,6 +75,11 @@ export interface AiChatReply {
   toolCalls?: AiToolCallView[];
   validationWarnings?: string[];
   toolLimitReached?: boolean;
+  failed?: boolean;
+  errorCode?: string;
+  message?: string;
+  statusCode?: number;
+  requestId?: string;
 }
 
 export interface AiMessage {
@@ -95,7 +101,7 @@ export type AiStreamEvent =
   | { event: "tool_limit"; data: { message?: string } }
   | { event: "validation_warning"; data: { message?: string } }
   | { event: "done"; data: Record<string, unknown> }
-  | { event: "error"; data: { message?: string } };
+  | { event: "error"; data: { message?: string; errorCode?: string; provider?: string; model?: string; statusCode?: number; requestId?: string } };
 
 function parseSseBlock(block: string): AiStreamEvent | null {
   const lines = block.split(/\r?\n/);
@@ -132,7 +138,14 @@ export async function streamAiChat(
     signal
   });
   if (!res.ok || !res.body) {
-    throw new Error(`流式请求失败：${res.status}`);
+    let message = `流式请求失败：${res.status}`;
+    try {
+      const payload = await res.json();
+      message = payload?.message || message;
+    } catch {
+      // Keep the HTTP status message when the backend does not return JSON.
+    }
+    throw new Error(message);
   }
 
   const reader = res.body.getReader();

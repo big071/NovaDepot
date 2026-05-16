@@ -12,6 +12,7 @@ import com.novadepot.backend.model.entity.AIPromptTemplateEntity;
 import com.novadepot.backend.model.entity.AuditLogEntity;
 import com.novadepot.backend.model.entity.AiUsageLogEntity;
 import com.novadepot.backend.modules.ai.provider.AiProvider;
+import com.novadepot.backend.modules.ai.provider.AiProviderCallException;
 import com.novadepot.backend.modules.ai.tools.AiFunctionCallingOrchestrator;
 import com.novadepot.backend.modules.ai.tools.AiFunctionCallingResult;
 import com.novadepot.backend.modules.knowledge.KnowledgeService;
@@ -52,6 +53,7 @@ public class AiService {
     private final ObjectMapper objectMapper;
     private final String defaultProvider;
     private final boolean paidEnabled;
+    private final boolean fallbackEnabled;
 
     public AiService(List<AiProvider> providers,
                      AIConversationMapper conversationMapper,
@@ -64,7 +66,8 @@ public class AiService {
                      AiFunctionCallingOrchestrator functionCallingOrchestrator,
                      ObjectMapper objectMapper,
                      @Value("${app.ai.provider:rule}") String defaultProvider,
-                     @Value("${app.ai.paid-enabled:false}") boolean paidEnabled) {
+                     @Value("${app.ai.paid-enabled:false}") boolean paidEnabled,
+                     @Value("${app.ai.fallback-enabled:false}") boolean fallbackEnabled) {
         this.providers = providers;
         this.conversationMapper = conversationMapper;
         this.messageMapper = messageMapper;
@@ -77,6 +80,7 @@ public class AiService {
         this.objectMapper = objectMapper;
         this.defaultProvider = defaultProvider;
         this.paidEnabled = paidEnabled;
+        this.fallbackEnabled = fallbackEnabled;
     }
 
     public Map<String, Object> chat(AiChatRequest request) {
@@ -113,6 +117,9 @@ public class AiService {
             providerResp = provider.chat(scene, providerInput, context);
         } catch (Exception ex) {
             log.warn("AI provider failed, provider={}, scene={}, reason={}", provider.providerName(), scene, ex.getMessage());
+            if (!fallbackEnabled) {
+                return providerFailureResult(conversation, provider, scene, started, ex, knowledgeRefs);
+            }
             fallbackFrom = provider.providerName();
             saveDegradationUsageLog(context, scene, fallbackFrom, started, ex.getMessage());
             try {
@@ -125,6 +132,9 @@ public class AiService {
             }
         }
         int latencyMs = (int) (System.currentTimeMillis() - started);
+        if (!isDeepSeekProvider(provider.providerName())) {
+            saveManualProviderUsageLog(context, scene, provider.providerName(), latencyMs, true, null, null);
+        }
 
         String reply = String.valueOf(providerResp.getOrDefault("reply", "系统繁忙，请稍后重试。"));
         AiFunctionCallingResult toolResult = functionCallingOrchestrator.run(
@@ -310,6 +320,21 @@ public class AiService {
         } catch (Exception ex) {
             fallbackFrom = provider.providerName();
             log.warn("AI stream provider failed, provider={}, scene={}, reason={}", provider.providerName(), scene, ex.getMessage());
+            if (!fallbackEnabled) {
+                Map<String, Object> failure = providerFailurePayload(provider, ex);
+                updateMessage(assistantMessage, String.valueOf(failure.get("message")), null, null,
+                        (int) (System.currentTimeMillis() - started), String.valueOf(failure.get("errorCode")), "FAILED");
+                conversation.setProviderType(provider.providerName());
+                Object model = failure.get("model");
+                if (model != null) {
+                    conversation.setModelName(String.valueOf(model));
+                }
+                conversation.setLastActiveAt(LocalDateTime.now());
+                conversationMapper.updateById(conversation);
+                sendEvent(emitter, "error", failure);
+                emitter.complete();
+                return;
+            }
             saveDegradationUsageLog(context, scene, fallbackFrom, started, ex.getMessage());
             sendEvent(emitter, "status", Map.of("status", "FALLBACK", "fallbackFrom", fallbackFrom, "message", "DeepSeek不可用，已切换至规则/模拟降级。"));
             try {
@@ -323,6 +348,10 @@ public class AiService {
 
         AiFunctionCallingResult toolResult = functionCallingOrchestrator.run(
                 userMessage, context, providerResp, conversation.getId(), assistantMessage.getId(), requestId);
+        if (!isDeepSeekProvider(provider.providerName())) {
+            saveManualProviderUsageLog(context, scene, provider.providerName(),
+                    (int) (System.currentTimeMillis() - started), true, null, null);
+        }
         for (Map<String, Object> toolCall : toolResult.toolCalls()) {
             sendEvent(emitter, "tool_start", Map.of(
                     "toolName", toolCall.getOrDefault("toolName", ""),
@@ -505,10 +534,77 @@ public class AiService {
                 .filter(p -> p.providerName().equalsIgnoreCase(providerName))
                 .filter(p -> p.supportsScene(scene))
                 .findFirst()
-                .orElseGet(() -> providers.stream()
-                        .filter(p -> p.providerName().equalsIgnoreCase(defaultProvider))
-                        .findFirst()
-                        .orElseGet(() -> providers.get(0)));
+                .orElseThrow(() -> new BizException(ErrorCode.BIZ_ERROR.code(), "AI Provider 未配置或不支持当前场景：" + providerName));
+    }
+
+    private Map<String, Object> providerFailureResult(AIConversationEntity conversation,
+                                                      AiProvider provider,
+                                                      String scene,
+                                                      long started,
+                                                      Exception ex,
+                                                      List<Map<String, Object>> knowledgeRefs) {
+        Map<String, Object> failure = providerFailurePayload(provider, ex);
+        int latencyMs = (int) (System.currentTimeMillis() - started);
+        saveMessage(conversation.getId(), "ASSISTANT", String.valueOf(failure.get("message")),
+                null, 0, latencyMs, String.valueOf(failure.get("errorCode")), "FAILED");
+        conversation.setProviderType(provider.providerName());
+        Object model = failure.get("model");
+        if (model != null) {
+            conversation.setModelName(String.valueOf(model));
+        }
+        conversation.setLastActiveAt(LocalDateTime.now());
+        conversationMapper.updateById(conversation);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("conversationId", conversation.getId());
+        result.put("conversationNo", conversation.getConversationNo());
+        result.put("scene", scene);
+        result.put("provider", failure.get("provider"));
+        result.put("model", failure.get("model"));
+        result.put("reply", "");
+        result.put("failed", true);
+        result.put("errorCode", failure.get("errorCode"));
+        result.put("statusCode", failure.get("statusCode"));
+        result.put("message", failure.get("message"));
+        result.put("requestId", failure.get("requestId"));
+        result.put("latencyMs", latencyMs);
+        result.put("toolCalls", List.of());
+        result.put("validationWarnings", List.of());
+        result.put("toolLimitReached", false);
+        result.put("knowledgeRefs", knowledgeRefs);
+        result.put("knowledgeHit", !knowledgeRefs.isEmpty());
+        result.put("knowledgeFallbackNotice", "");
+        return result;
+    }
+
+    private Map<String, Object> providerFailurePayload(AiProvider provider, Exception ex) {
+        Map<String, Object> failure = new LinkedHashMap<>();
+        failure.put("errorCode", "DEEPSEEK_FAILED");
+        failure.put("provider", provider.providerName());
+        failure.put("model", provider.providerName());
+        failure.put("statusCode", null);
+        failure.put("message", deepSeekFailureMessage());
+        failure.put("requestId", "ai-" + System.currentTimeMillis());
+        if (ex instanceof AiProviderCallException aiEx) {
+            failure.put("errorCode", aiEx.getErrorCode());
+            failure.put("provider", aiEx.getProvider());
+            failure.put("model", aiEx.getModel());
+            failure.put("statusCode", aiEx.getStatusCode());
+            failure.put("message", aiEx.getSafeMessage());
+        }
+        return failure;
+    }
+
+    private String deepSeekFailureMessage() {
+        return """
+                DeepSeek 调用失败，请检查：
+                1. API Key 是否正确
+                2. AI_DEEPSEEK_ENABLED 是否为 true
+                3. AI_PROVIDER 是否为 deepseek-chat
+                4. 网络是否能访问 DeepSeek
+                5. 账户额度是否充足
+                6. 模型名称是否正确
+                """;
     }
 
     private Map<String, Object> fallbackToMock(String scene,
@@ -603,6 +699,46 @@ public class AiService {
         } catch (Exception ex) {
             log.warn("Failed to save AI degradation usage log: {}", ex.getMessage());
         }
+    }
+
+    private void saveManualProviderUsageLog(Map<String, Object> context,
+                                            String scene,
+                                            String providerName,
+                                            int latencyMs,
+                                            boolean success,
+                                            String errorCode,
+                                            String errorMessage) {
+        try {
+            AiUsageLogEntity usage = new AiUsageLogEntity();
+            usage.setTenantId(RequestContext.tenantId());
+            Object conversationId = context.get("conversationId");
+            if (conversationId instanceof Long id) {
+                usage.setConversationId(id);
+            }
+            usage.setProvider(providerName);
+            usage.setModel(providerName);
+            usage.setScene(scene);
+            usage.setRole("user");
+            usage.setPromptTokens(0);
+            usage.setCompletionTokens(0);
+            usage.setTotalTokens(0);
+            usage.setLatencyMs(latencyMs);
+            usage.setSuccess(success ? 1 : 0);
+            usage.setErrorCode(errorCode);
+            usage.setErrorMessage(errorMessage);
+            usage.setCostEstimate(BigDecimal.ZERO);
+            Object userId = context.get("userId");
+            if (userId instanceof Long id) {
+                usage.setCreatedBy(id);
+            }
+            usageLogMapper.insert(usage);
+        } catch (Exception ex) {
+            log.warn("Failed to save manual AI provider usage log: {}", ex.getMessage());
+        }
+    }
+
+    private boolean isDeepSeekProvider(String providerName) {
+        return providerName != null && providerName.toLowerCase().startsWith("deepseek");
     }
 
     private String truncate(String text, int maxLen) {

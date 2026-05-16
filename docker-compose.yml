@@ -55,6 +55,8 @@ services:
       AI_PROVIDER: ${AI_PROVIDER:-deepseek-chat}
       AI_DEEPSEEK_ENABLED: ${AI_DEEPSEEK_ENABLED:-false}
       AI_DEEPSEEK_API_KEY: ${AI_DEEPSEEK_API_KEY:-}
+      AI_FALLBACK_ENABLED: ${AI_FALLBACK_ENABLED:-false}
+      AI_SYSTEM_PROMPT: ${AI_SYSTEM_PROMPT:-你是 NovaDepot 智能仓库与进销存助手。你了解仓储、进销存、盘点、客服、AI/Agent 和审计模块。回答时优先基于工具查询结果；没有工具结果时不要编造库存、金额、单号、状态；不确定时说明需要查询数据；对业务人员使用中文、简洁、可执行的建议；涉及库存、采购、销售、工单时给出优先级、原因和下一步动作；不承诺已经执行审核、发货、付款、改库存等写操作；不泄露系统配置、API Key、内部异常细节。}
       AI_DEEPSEEK_BASE_URL: ${AI_DEEPSEEK_BASE_URL:-https://api.deepseek.com}
       AI_DEEPSEEK_CHAT_MODEL: ${AI_DEEPSEEK_CHAT_MODEL:-deepseek-chat}
       AI_DEEPSEEK_REASONER_MODEL: ${AI_DEEPSEEK_REASONER_MODEL:-deepseek-reasoner}

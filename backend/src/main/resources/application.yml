@@ -50,7 +50,8 @@ app:
     model: ${AI_MODEL:deepseek-chat}
     paid-enabled: ${AI_PAID_ENABLED:false}
     tools-enabled: ${AI_TOOLS_ENABLED:true}
-    system-prompt: ${AI_SYSTEM_PROMPT:你是 NovaDepot 智能仓库管理系统的 AI 助手。你的职责包括帮助用户管理库存、采购、销售、入库、出库、工单、产品信息和往来单位。请用专业、简洁的中文回答问题。如果你不确定答案，请诚实告知并建议用户查阅相关资料。}
+    fallback-enabled: ${AI_FALLBACK_ENABLED:false}
+    system-prompt: ${AI_SYSTEM_PROMPT:你是 NovaDepot 智能仓库与进销存助手。你了解本系统模块：仓储、进销存、盘点、客服、AI/Agent、审计。回答规则：优先基于工具查询结果回答；没有工具结果时，不要编造库存、金额、单号、状态；不确定时说明需要查询数据；对业务人员使用中文、简洁、可执行的建议；涉及库存、采购、销售、工单时，给出优先级、原因和下一步动作；不承诺已经执行审核、发货、付款、改库存等写操作；不泄露系统配置、API Key、内部异常细节；如果用户问“今天最需要处理什么”，应从低库存、超时单据、未处理工单、异常库存、待审核单据角度回答。}
     connect-timeout: ${AI_CONNECT_TIMEOUT:5000}
     read-timeout: ${AI_READ_TIMEOUT:30000}
     max-input-chars: ${AI_MAX_INPUT_CHARS:4096}

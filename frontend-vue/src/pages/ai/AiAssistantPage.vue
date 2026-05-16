@@ -535,8 +535,7 @@ async function sendMessage() {
     await streamAiChat({
       scene: scene.value,
       message: normalizedMessage,
-      conversationNo: activeConversationNo.value ?? undefined,
-      providerHint: "deepseek-chat"
+      conversationNo: activeConversationNo.value ?? undefined
     }, requestId, abortController.value.signal, (event) => handleStreamEvent(event, optimisticConversationNo));
     lastSuccessText.value = `消息发送成功：${new Date().toLocaleString("zh-CN", { hour12: false })}`;
     await loadConversations();
@@ -545,8 +544,13 @@ async function sendMessage() {
       markLastAssistant(optimisticConversationNo, "STOPPED");
       streamStatusText.value = "已停止生成，保留当前已输出内容。";
     } else {
-      streamStatusText.value = "流式输出失败，已尝试切换为普通回复。";
-      await sendNonStreamingFallback(normalizedMessage, optimisticConversationNo);
+      const conversationNo = activeConversationNo.value ?? optimisticConversationNo;
+      const message = formatAiFailure(error);
+      markLastAssistant(conversationNo, "FAILED");
+      setLastAssistantContent(conversationNo, message);
+      errorText.value = message;
+      streamStatusText.value = "";
+      uiMessage.error("DeepSeek 调用失败");
     }
   } finally {
     sending.value = false;
@@ -602,10 +606,10 @@ function handleStreamEvent(event: AiStreamEvent, optimisticConversationNo: strin
       markToolLimit(conversationNo);
     }
     if (event.data.fallbackFrom) {
-      streamStatusText.value = `DeepSeek 不可用，已从 ${event.data.fallbackFrom} 降级完成。`;
+      streamStatusText.value = `已按显式 fallback 配置从 ${event.data.fallbackFrom} 降级完成。`;
     }
   } else if (event.event === "error") {
-    throw new Error(event.data.message || "流式输出失败");
+    throw new Error(formatAiFailure(event.data));
   }
 }
 
@@ -614,8 +618,7 @@ async function sendNonStreamingFallback(normalizedMessage: string, optimisticCon
     const resp = await aiApi.chat({
       scene: scene.value,
       message: normalizedMessage,
-      conversationNo: activeConversationNo.value ?? undefined,
-      providerHint: "deepseek-chat"
+      conversationNo: activeConversationNo.value ?? undefined
     });
     activeConversationNo.value = resp.conversationNo;
     if (optimisticConversationNo !== resp.conversationNo && messageMap.value[optimisticConversationNo]) {
@@ -664,6 +667,34 @@ function markLastAssistant(conversationNo: string, status: ChatMessage["status"]
   if (last) {
     last.status = status;
   }
+}
+
+function setLastAssistantContent(conversationNo: string, content: string) {
+  const list = messageMap.value[conversationNo] ?? [];
+  const last = [...list].reverse().find((item) => item.role === "assistant");
+  if (last && !last.content) {
+    last.content = content;
+  }
+}
+
+function formatAiFailure(error: unknown) {
+  const message = error instanceof Error
+    ? error.message
+    : typeof error === "object" && error !== null && "message" in error
+      ? String((error as { message?: unknown }).message ?? "")
+      : "";
+  if (message.includes("DeepSeek 调用失败")) {
+    return message;
+  }
+  return [
+    "DeepSeek 调用失败，请检查：",
+    "1. API Key 是否正确",
+    "2. AI_DEEPSEEK_ENABLED 是否为 true",
+    "3. AI_PROVIDER 是否为 deepseek-chat",
+    "4. 网络是否能访问 DeepSeek",
+    "5. 账户额度是否充足",
+    "6. 模型名称是否正确"
+  ].join("\n");
 }
 
 function lastAssistant(conversationNo: string) {
