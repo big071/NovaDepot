@@ -1,23 +1,20 @@
 <template>
-  <aside class="sticky top-0 hidden h-screen w-64 shrink-0 overflow-y-auto border-r border-border bg-surface/85 px-3 py-4 backdrop-blur lg:block">
+  <aside
+    class="sticky top-0 hidden h-screen w-64 shrink-0 overflow-y-auto border-r border-border bg-surface/85 px-3 py-4 backdrop-blur lg:block">
     <div class="mb-6 rounded-xl border border-border/80 bg-bg/60 px-3 py-3">
       <p class="text-xs uppercase tracking-[0.2em] text-text-secondary">NovaDepot</p>
       <h1 class="mt-1 text-lg font-semibold tracking-tight">{{ authStore.roleNameZh }}导航</h1>
     </div>
     <nav class="space-y-1.5">
-      <RouterLink
-        v-for="item in navItems"
-        :key="item.path"
-        :to="item.path"
+      <RouterLink v-for="item in navItems" :key="item.path" :to="item.path"
         class="group flex items-center justify-between rounded-xl border border-transparent px-3 py-2.5 text-sm transition-all"
-        :class="
-          route.path === item.path
-            ? 'border-primary/30 bg-primary/10 text-primary shadow-card'
-            : 'text-text-secondary hover:-translate-y-0.5 hover:border-border hover:bg-bg hover:text-text-primary'
-        "
-      >
+        :class="route.path === item.path
+          ? 'border-primary/30 bg-primary/10 text-primary shadow-card'
+          : 'text-text-secondary hover:-translate-y-0.5 hover:border-border hover:bg-bg hover:text-text-primary'
+          ">
         <span>{{ item.label }}</span>
-        <span class="h-2 w-2 rounded-full transition" :class="route.path === item.path ? 'bg-primary' : 'bg-transparent group-hover:bg-info/60'" />
+        <span class="h-2 w-2 rounded-full transition"
+          :class="route.path === item.path ? 'bg-primary' : 'bg-transparent group-hover:bg-info/60'" />
       </RouterLink>
     </nav>
   </aside>
@@ -34,6 +31,8 @@ const authStore = useAuthStore();
 const roleMenuMap: Record<string, Array<{ label: string; path: string; permission: string }>> = {
   admin: [
     { label: "经营总览", path: "/dashboard", permission: "REPORT_DASHBOARD_READ" },
+    { label: "通知中心", path: "/notifications", permission: "NOTIFY_READ" },
+    { label: "报表中心", path: "/reports", permission: "REPORT_CENTER_READ" },
     { label: "商品管理", path: "/wms/products", permission: "PRODUCT_READ" },
     { label: "仓库管理", path: "/wms/warehouses", permission: "WAREHOUSE_READ" },
     { label: "库位管理", path: "/wms/locations", permission: "LOCATION_READ" },
@@ -46,6 +45,7 @@ const roleMenuMap: Record<string, Array<{ label: string; path: string; permissio
     { label: "销售管理", path: "/erp/sales", permission: "SALES_READ" },
     { label: "应收应付", path: "/erp/finance", permission: "FINANCE_PAYABLE_READ" },
     { label: "AI 助手", path: "/ai/enterprise", permission: "AI_CHAT" },
+    { label: "AI 用量日志", path: "/ai/usage-logs", permission: "AI_USAGE_LOG_VIEW" },
     { label: "Agent 中心", path: "/agent/center", permission: "AGENT_TASK_READ" },
     { label: "知识维护", path: "/cs/knowledge", permission: "KNOWLEDGE_READ" },
     { label: "用户管理", path: "/system/users", permission: "USER_READ" },
@@ -54,6 +54,8 @@ const roleMenuMap: Record<string, Array<{ label: string; path: string; permissio
   ],
   warehouse_ops: [
     { label: "仓储工作台", path: "/dashboard", permission: "REPORT_DASHBOARD_READ" },
+    { label: "通知中心", path: "/notifications", permission: "NOTIFY_READ" },
+    { label: "报表中心", path: "/reports", permission: "REPORT_CENTER_READ" },
     { label: "库存管理", path: "/wms/inventory", permission: "INVENTORY_READ" },
     { label: "库存盘点", path: "/wms/stock-take", permission: "STOCKTAKE_READ" },
     { label: "入库管理", path: "/wms/inbound", permission: "INBOUND_READ" },
@@ -70,6 +72,8 @@ const roleMenuMap: Record<string, Array<{ label: string; path: string; permissio
   ],
   cs_ops: [
     { label: "客服工作台", path: "/cs/workspace", permission: "CS_SESSION_READ" },
+    { label: "通知中心", path: "/notifications", permission: "NOTIFY_READ" },
+    { label: "报表中心", path: "/reports", permission: "REPORT_CENTER_READ" },
     { label: "销售管理", path: "/erp/sales", permission: "SALES_READ" },
     { label: "应收台账", path: "/erp/finance", permission: "FINANCE_RECEIVABLE_READ" },
     { label: "采购单只读", path: "/erp/purchases", permission: "PURCHASE_READ" },
@@ -81,6 +85,8 @@ const roleMenuMap: Record<string, Array<{ label: string; path: string; permissio
   ],
   observer: [
     { label: "只读总览", path: "/dashboard", permission: "REPORT_DASHBOARD_READ" },
+    { label: "通知中心", path: "/notifications", permission: "NOTIFY_READ" },
+    { label: "报表中心", path: "/reports", permission: "REPORT_CENTER_READ" },
     { label: "库存建议", path: "/wms/inventory", permission: "INVENTORY_READ" },
     { label: "库存盘点", path: "/wms/stock-take", permission: "STOCKTAKE_READ" },
     { label: "往来单位", path: "/erp/partners", permission: "PARTNER_READ" },

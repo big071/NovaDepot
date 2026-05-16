@@ -11,9 +11,11 @@ import java.util.Map;
 @RequestMapping("/api/v1/audit-logs")
 public class AuditLogsController {
     private final AuditLogsService service;
+    private final AuditLogCleanupService cleanupService;
 
-    public AuditLogsController(AuditLogsService service) {
+    public AuditLogsController(AuditLogsService service, AuditLogCleanupService cleanupService) {
         this.service = service;
+        this.cleanupService = cleanupService;
     }
 
     @GetMapping
@@ -38,5 +40,11 @@ public class AuditLogsController {
     @RequirePermission("AUDIT_READ")
     public ApiResponse<Map<String, Object>> detail(@PathVariable Long id) {
         return ApiResponse.success(service.detail(id), MDC.get("traceId"));
+    }
+
+    @PostMapping("/cleanup")
+    @RequirePermission("AUDIT_CLEANUP_RUN")
+    public ApiResponse<Map<String, Object>> cleanup() {
+        return ApiResponse.success(cleanupService.cleanup(), MDC.get("traceId"));
     }
 }

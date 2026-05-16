@@ -18,6 +18,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -185,6 +186,41 @@ class MainlineSmokeTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"))
                 .andExpect(jsonPath("$.data").isArray());
+
+        MvcResult createdConversation = authedPost("/api/v1/ai/conversations?scene=enterprise", "{}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.data.id").exists())
+                .andReturn();
+        Long conversationId = parseDataNode(createdConversation).path("id").asLong();
+        assertThat(conversationId).isPositive();
+
+        MvcResult streamResult = mockMvc.perform(
+                        post("/api/v1/ai/chat/stream?requestId=smoke-stream")
+                                .header("Authorization", bearer())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {
+                                          "scene": "enterprise",
+                                          "message": "stream smoke test",
+                                          "conversationId": %d,
+                                          "providerHint": "rule"
+                                        }
+                                        """.formatted(conversationId))
+                )
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        streamResult.getAsyncResult(5000);
+        authedGet("/api/v1/ai/conversations/" + conversationId + "/messages")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.data").isArray());
+
+        authedPost("/api/v1/ai/conversations/" + conversationId + "/archive", "{}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.data.status").value("ARCHIVED"));
     }
 
     @Test
