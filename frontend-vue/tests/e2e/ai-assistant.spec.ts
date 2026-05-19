@@ -6,6 +6,15 @@ test("AI 会话发送并展示历史消息", async ({ page }) => {
   await goToPath(page, "/ai/enterprise");
 
   await expect(page.getByRole("heading", { name: "AI 助手工作台" })).toBeVisible();
+  const configWarning = page.getByText(/DeepSeek 未启用|DeepSeek API Key 未配置/).first();
+  await expect.poll(async () => (
+    await page.getByRole("button", { name: "发送" }).isDisabled()
+    || await page.getByPlaceholder("输入问题并发送").isEnabled()
+  )).toBeTruthy();
+  if (await page.getByRole("button", { name: "发送" }).isDisabled()) {
+    await expect(configWarning).toBeVisible();
+    return;
+  }
 
   const content = `E2E库存检查-${Date.now()}`;
   await page.getByPlaceholder("输入问题并发送").fill(content);
@@ -21,6 +30,15 @@ test("AI 会话发送并展示历史消息", async ({ page }) => {
 test("AI 工具调用过程可视化", async ({ page }) => {
   await loginAsAdmin(page);
   await goToPath(page, "/ai/enterprise");
+  const configWarning = page.getByText(/DeepSeek 未启用|DeepSeek API Key 未配置/).first();
+  await expect.poll(async () => (
+    await page.getByRole("button", { name: "发送" }).isDisabled()
+    || await page.getByPlaceholder("输入问题并发送").isEnabled()
+  )).toBeTruthy();
+  if (await page.getByRole("button", { name: "发送" }).isDisabled()) {
+    await expect(configWarning).toBeVisible();
+    return;
+  }
 
   await page.getByPlaceholder("输入问题并发送").fill("请查询今日库存概览");
   await page.getByRole("button", { name: "发送" }).click();

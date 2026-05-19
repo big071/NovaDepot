@@ -50,6 +50,9 @@
         </div>
       </header>
       <div class="nd-table-body">
+        <n-alert v-if="aiConfigWarning" class="nd-state-alert mb-3" type="warning" :show-icon="false">
+          {{ aiConfigWarning }}
+        </n-alert>
         <n-alert class="nd-state-alert mb-3" type="info" :show-icon="false">
           新手可先点击推荐问题。识别为任务型请求时，会自动调用 Agent，并返回结论摘要、执行依据和表格明细。
         </n-alert>
@@ -174,6 +177,7 @@
           <div class="nd-chat-composer">
             <div class="flex gap-2">
               <n-input class="nd-soft-focus" v-model:value="inputText" placeholder="输入问题并发送"
+                :disabled="Boolean(aiConfigWarning)"
                 @keyup.enter="sendMessage" />
               <n-button v-if="sending" class="nd-soft-focus" type="warning" @click="stopGeneration">停止</n-button>
               <n-button v-else class="nd-soft-focus" type="primary" :disabled="!canSend"
@@ -191,7 +195,7 @@ import { computed, h, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { NAlert, NButton, NDataTable, NEmpty, NInput, NSelect, NTag, useMessage } from "naive-ui";
 import type { DataTableColumns } from "naive-ui";
-import { aiApi, streamAiChat, type AiConversation, type AiMessage, type AiStreamEvent, type AiToolCallView } from "@/services/ai";
+import { aiApi, streamAiChat, type AiConfig, type AiConversation, type AiMessage, type AiStreamEvent, type AiToolCallView } from "@/services/ai";
 import type { KnowledgeRef } from "@/services/knowledge";
 
 type ChatMessage = {
@@ -220,6 +224,7 @@ const activeConversationNo = ref<string | null>(null);
 const messageMap = ref<Record<string, ChatMessage[]>>({});
 const abortController = ref<AbortController | null>(null);
 const activeRequestId = ref("");
+const aiConfig = ref<AiConfig | null>(null);
 const taskRunInfo = ref<{
   id?: string;
   taskCode?: string;
@@ -269,7 +274,19 @@ const recommendedQuestions = computed(() => {
     "请给管理层一份今日运营摘要，包含下一步建议。"
   ];
 });
-const canSend = computed(() => !sending.value && !loadingMessages.value && Boolean(inputText.value.trim()) && activeConversation.value?.status !== "ARCHIVED");
+const aiConfigWarning = computed(() => {
+  const config = aiConfig.value;
+  if (!config || config.defaultProvider !== "deepseek-chat") return "";
+  if (!config.deepseekEnabled) {
+    return "DeepSeek 未启用：请设置 AI_DEEPSEEK_ENABLED=true 并重启后端。";
+  }
+  if (!config.deepseekApiKeyMasked || config.deepseekApiKeyMasked === "***") {
+    return "DeepSeek API Key 未配置：请在本地 .env 设置 AI_DEEPSEEK_API_KEY 后重启后端。";
+  }
+  return "";
+});
+const canSend = computed(() => !sending.value && !loadingMessages.value && !aiConfigWarning.value
+  && Boolean(inputText.value.trim()) && activeConversation.value?.status !== "ARCHIVED");
 
 const taskView = computed<Record<string, unknown>>(() => {
   const current = taskRunInfo.value;
@@ -451,6 +468,14 @@ async function loadConversations() {
   }
 }
 
+async function loadAiConfig() {
+  try {
+    aiConfig.value = await aiApi.config();
+  } catch {
+    aiConfig.value = null;
+  }
+}
+
 function toChatMessage(msg: AiMessage): ChatMessage {
   return {
     role: msg.role === "USER" ? "user" : "assistant",
@@ -508,6 +533,11 @@ async function archiveActiveConversation() {
 }
 
 async function sendMessage() {
+  if (aiConfigWarning.value) {
+    errorText.value = aiConfigWarning.value;
+    uiMessage.warning(aiConfigWarning.value);
+    return;
+  }
   if (!inputText.value.trim()) {
     uiMessage.warning("请输入问题后再发送");
     return;
@@ -780,5 +810,8 @@ function normalizeMessageForAgent(content: string) {
   return text;
 }
 
-onMounted(loadConversations);
+onMounted(async () => {
+  await loadAiConfig();
+  await loadConversations();
+});
 </script>
