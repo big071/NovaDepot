@@ -2,7 +2,7 @@
 
 NovaDepot is a smart warehouse management system, lightweight ERP, AI assistant, Agent patrol, and customer-service platform.
 
-Current release line: **v1.2 DeepSeek Intelligence Core**.
+Current release line: **v1.2 DeepSeek Intelligence Core** with **v1.2.1 AI Experience Hotfix** work on `hotfix/v1.2.1-ai-experience`.
 
 ## Core Capabilities
 
@@ -60,9 +60,10 @@ AI_PROVIDER=deepseek-chat
 AI_DEEPSEEK_ENABLED=false
 AI_DEEPSEEK_API_KEY=
 AI_TOOLS_ENABLED=true
+AI_FALLBACK_ENABLED=false
 ```
 
-When no real DeepSeek key is configured, non-streaming, streaming, and Function Calling orchestration degrade through RuleProvider/MockProvider instead of returning 500.
+For v1.2.1, RuleProvider is used only when `AI_PROVIDER=rule`, or when fallback is explicitly enabled with `AI_FALLBACK_ENABLED=true`. If `AI_PROVIDER=deepseek-chat`, `AI_DEEPSEEK_ENABLED=true`, and fallback is disabled, DeepSeek failures are reported clearly in the UI and recorded in `ai_usage_logs` with `success=0` and an error code.
 
 ## Common Commands
 

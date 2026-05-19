@@ -31,7 +31,45 @@ public class AiConfigController {
         result.put("deepseekReasonerModel", aiProperties.getDeepseekReasonerModel());
         result.put("deepseekApiKeyMasked", maskApiKey(aiProperties.getDeepseekApiKey()));
         result.put("paidEnabled", aiProperties.isPaidEnabled());
+        result.put("fallbackEnabled", aiProperties.isFallbackEnabled());
+        result.put("toolsEnabled", aiProperties.isToolsEnabled());
+        result.put("activeModel", activeModel());
+        result.put("providerStatus", providerStatus());
+        result.put("fallbackStatus", aiProperties.isFallbackEnabled() ? "ENABLED" : "DISABLED");
+        result.put("systemPromptPreview", preview(aiProperties.getSystemPrompt(), 600));
         return ApiResponse.success(result, MDC.get("traceId"));
+    }
+
+    private String activeModel() {
+        String provider = aiProperties.getProvider();
+        if ("deepseek-reasoner".equalsIgnoreCase(provider)) {
+            return aiProperties.getDeepseekReasonerModel();
+        }
+        if ("deepseek-chat".equalsIgnoreCase(provider)) {
+            return aiProperties.getDeepseekChatModel();
+        }
+        if ("paid".equalsIgnoreCase(provider)) {
+            return aiProperties.getModel();
+        }
+        return provider;
+    }
+
+    private String providerStatus() {
+        String provider = aiProperties.getProvider();
+        if (provider != null && provider.toLowerCase().startsWith("deepseek")) {
+            return aiProperties.isDeepseekEnabled() ? "READY" : "DISABLED";
+        }
+        if ("rule".equalsIgnoreCase(provider)) {
+            return "RULE_ONLY";
+        }
+        return "CONFIGURED";
+    }
+
+    private String preview(String text, int maxLen) {
+        if (text == null) {
+            return "";
+        }
+        return text.length() <= maxLen ? text : text.substring(0, maxLen) + "...";
     }
 
     private String maskApiKey(String key) {

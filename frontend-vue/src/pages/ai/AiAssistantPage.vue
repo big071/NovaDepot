@@ -136,26 +136,44 @@
           <div v-for="(item, index) in activeMessages" :key="index"
             class="max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-6"
             :class="item.role === 'user' ? 'ml-auto bg-primary text-white shadow-sm' : 'border border-border bg-surface text-text-primary'">
-            <div v-if="item.role === 'assistant' && item.toolCalls?.length" class="mb-2 space-y-2">
-              <article v-for="tool in item.toolCalls" :key="`${tool.toolName}-${tool.status}`"
-                class="rounded-lg border border-border bg-bg/60 p-2 text-xs text-text-secondary">
-                <div class="flex items-center justify-between gap-2">
-                  <p class="font-medium text-text-primary">{{ tool.displayName || tool.toolName }}</p>
-                  <n-tag size="small" :bordered="false" :type="toolStatusType(tool)">
-                    {{ toolStatusLabel(tool) }}
-                  </n-tag>
+            <p v-if="item.role === 'user'">{{ item.content }}</p>
+            <div v-else class="nd-ai-rich space-y-3">
+              <section v-for="section in parseAssistantContent(item.content)" :key="section.title || section.content.join('|')"
+                class="rounded-lg border border-border bg-bg/40 p-3">
+                <div v-if="section.title" class="mb-2 flex items-center justify-between gap-2">
+                  <h3 class="text-sm font-semibold text-text-primary">{{ section.title }}</h3>
+                  <n-tag v-if="section.badge" size="small" :bordered="false" :type="section.badgeType">{{ section.badge }}</n-tag>
                 </div>
-                <p v-if="tool.argumentsSummary" class="mt-1">条件：{{ tool.argumentsSummary }}</p>
-                <p v-if="tool.summary" class="mt-1">{{ tool.summary }}</p>
-                <div v-if="tool.sources?.length" class="mt-2 flex flex-wrap gap-1">
-                  <n-tag v-for="source in tool.sources.slice(0, 3)" :key="String(source.sourceId ?? source.bizNo ?? source.name)"
-                    size="small" :bordered="false" type="info">
-                    {{ sourceLabel(source) }}
-                  </n-tag>
-                </div>
-              </article>
+                <ul v-if="section.items.length" class="space-y-2">
+                  <li v-for="itemText in section.items" :key="itemText" class="leading-6" v-html="renderInlineMarkdown(itemText)"></li>
+                </ul>
+                <p v-for="paragraph in section.content" :key="paragraph" class="leading-6" v-html="renderInlineMarkdown(paragraph)"></p>
+              </section>
+
+              <n-collapse v-if="item.toolCalls?.length" class="nd-tool-evidence">
+                <n-collapse-item title="工具调用依据" :name="`tools-${index}`">
+                  <div class="space-y-2">
+                    <article v-for="(tool, toolIndex) in item.toolCalls" :key="`${tool.displayName || tool.toolName}-${toolIndex}-${tool.status}`"
+                      class="rounded-lg border border-border bg-bg/60 p-2 text-xs text-text-secondary">
+                      <div class="flex items-center justify-between gap-2">
+                        <p class="font-medium text-text-primary">{{ tool.displayName || toolBusinessLabel(tool.toolName) }}</p>
+                        <n-tag size="small" :bordered="false" :type="toolStatusType(tool)">
+                          {{ toolStatusLabel(tool) }}
+                        </n-tag>
+                      </div>
+                      <p v-if="tool.argumentsSummary" class="mt-1">条件：{{ friendlyArguments(tool.argumentsSummary) }}</p>
+                      <p v-if="tool.summary" class="mt-1">{{ tool.summary }}</p>
+                      <div v-if="tool.sources?.length" class="mt-2 flex flex-wrap gap-1">
+                        <n-tag v-for="source in tool.sources.slice(0, 3)" :key="String(source.sourceId ?? source.bizNo ?? source.name)"
+                          size="small" :bordered="false" type="info">
+                          {{ sourceLabel(source) }}
+                        </n-tag>
+                      </div>
+                    </article>
+                  </div>
+                </n-collapse-item>
+              </n-collapse>
             </div>
-            <p>{{ item.content }}</p>
             <div v-if="item.role === 'assistant' && item.validationWarnings?.length" class="mt-2 space-y-1 text-xs text-warning">
               <p v-for="warning in item.validationWarnings" :key="warning">{{ warning }}</p>
             </div>
@@ -189,7 +207,7 @@
 <script setup lang="ts">
 import { computed, h, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
-import { NAlert, NButton, NDataTable, NEmpty, NInput, NSelect, NTag, useMessage } from "naive-ui";
+import { NAlert, NButton, NCollapse, NCollapseItem, NDataTable, NEmpty, NInput, NSelect, NTag, useMessage } from "naive-ui";
 import type { DataTableColumns } from "naive-ui";
 import { aiApi, streamAiChat, type AiConversation, type AiMessage, type AiStreamEvent, type AiToolCallView } from "@/services/ai";
 import type { KnowledgeRef } from "@/services/knowledge";
@@ -204,6 +222,13 @@ type ChatMessage = {
 };
 type ToolCallMessage = AiToolCallView & { status?: "CALLING" | "SUCCESS" | "DENIED" | "EMPTY" | "FAILED" };
 type SummaryCard = { title: string; value: string };
+type RenderedSection = {
+  title: string;
+  content: string[];
+  items: string[];
+  badge?: string;
+  badgeType?: "default" | "error" | "info" | "success" | "warning";
+};
 
 const uiMessage = useMessage();
 const router = useRouter();
@@ -415,6 +440,112 @@ function formatCell(value: unknown) {
   if (value === null || value === undefined || value === "") return "-";
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
+}
+
+function parseAssistantContent(content: string): RenderedSection[] {
+  const cleaned = (content || "").replace(/\r/g, "").trim();
+  if (!cleaned) {
+    return [{ title: "生成中", content: ["正在整理业务回答..."], items: [], badge: "AI", badgeType: "info" }];
+  }
+  const knownTitles = ["当前结论", "主要风险", "建议动作", "数据依据", "下一步", "下一步可执行操作"];
+  const sections: RenderedSection[] = [];
+  let current: RenderedSection = { title: "当前结论", content: [], items: [], badge: "结论", badgeType: "success" };
+
+  for (const rawLine of cleaned.split("\n")) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const normalized = line.replace(/^#{1,6}\s*/, "").replace(/^\*\*(.+)\*\*$/, "$1").replace(/[:：]$/, "");
+    const matchedTitle = knownTitles.find((title) => normalized === title || normalized.startsWith(title));
+    if (matchedTitle) {
+      if (current.content.length || current.items.length) sections.push(current);
+      current = {
+        title: matchedTitle === "下一步" ? "下一步可执行操作" : matchedTitle,
+        content: [],
+        items: [],
+        ...sectionBadge(matchedTitle)
+      };
+      continue;
+    }
+
+    const bullet = line.match(/^[-*]\s+(.+)$/) || line.match(/^\d+[.)、]\s+(.+)$/);
+    if (bullet) {
+      current.items.push(cleanToolNames(bullet[1]));
+    } else {
+      splitLongParagraph(cleanToolNames(line)).forEach((paragraph) => current.content.push(paragraph));
+    }
+  }
+  if (current.content.length || current.items.length) sections.push(current);
+  return sections.length ? sections : [{ title: "当前结论", content: splitLongParagraph(cleanToolNames(cleaned)), items: [], badge: "结论", badgeType: "success" }];
+}
+
+function sectionBadge(title: string): Pick<RenderedSection, "badge" | "badgeType"> {
+  if (title.includes("风险")) return { badge: "风险", badgeType: "warning" };
+  if (title.includes("动作") || title.includes("下一步")) return { badge: "行动", badgeType: "info" };
+  if (title.includes("依据")) return { badge: "依据", badgeType: "default" };
+  return { badge: "结论", badgeType: "success" };
+}
+
+function splitLongParagraph(text: string) {
+  if (text.length <= 120) return [text];
+  return text.split(/(?<=[。！？；])/).map((item) => item.trim()).filter(Boolean);
+}
+
+function renderInlineMarkdown(text: string) {
+  const escaped = escapeHtml(text);
+  return escaped
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/(高优先级|高风险|失败|异常|超时|未查询到相关数据)/g, "<span class=\"nd-ai-risk-high\">$1</span>")
+    .replace(/(中优先级|中风险|待审核|待处理|未关闭)/g, "<span class=\"nd-ai-risk-medium\">$1</span>")
+    .replace(/(\d+(?:\.\d+)?\s*(?:件|条|个|元|天|小时|%|SKU|单)?)/g, "<span class=\"nd-ai-number\">$1</span>");
+}
+
+function escapeHtml(text: string) {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function cleanToolNames(text: string) {
+  return text
+    .replace(/\bquery_inventory\b/g, "库存查询")
+    .replace(/\bquery_purchase\b/g, "采购查询")
+    .replace(/\bquery_outbound\b/g, "出库查询")
+    .replace(/\bquery_tickets\b/g, "工单查询")
+    .replace(/\bquery_inbound\b/g, "入库查询")
+    .replace(/\bquery_sale\b/g, "销售查询")
+    .replace(/\bget_daily_report\b/g, "运营日报查询")
+    .replace(/\bget_inventory_stats\b/g, "库存统计查询");
+}
+
+function toolBusinessLabel(toolName?: string) {
+  if (!toolName) return "业务查询";
+  const map: Record<string, string> = {
+    query_inventory: "库存查询",
+    query_purchase: "采购查询",
+    query_outbound: "出库查询",
+    query_tickets: "工单查询",
+    query_inbound: "入库查询",
+    query_sale: "销售查询",
+    query_product: "商品查询",
+    query_partner: "往来单位查询",
+    get_daily_report: "运营日报查询",
+    get_inventory_stats: "库存统计查询"
+  };
+  return map[toolName] || "业务查询";
+}
+
+function friendlyArguments(argumentsSummary: string) {
+  return cleanToolNames(argumentsSummary)
+    .replace(/lowStock/g, "低库存")
+    .replace(/limit/g, "条数")
+    .replace(/status/g, "状态")
+    .replace(/orderNo/g, "单号")
+    .replace(/dateFrom/g, "开始日期")
+    .replace(/dateTo/g, "结束日期");
 }
 
 async function openTaskDetail() {
@@ -782,3 +913,48 @@ function normalizeMessageForAgent(content: string) {
 
 onMounted(loadConversations);
 </script>
+
+<style scoped>
+.nd-ai-rich :deep(strong) {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.nd-ai-rich :deep(code) {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 1px 5px;
+  color: var(--text-primary);
+  font-size: 0.85em;
+}
+
+.nd-ai-rich :deep(.nd-ai-number) {
+  border-radius: 4px;
+  background: rgba(14, 165, 233, 0.12);
+  padding: 1px 4px;
+  color: #0369a1;
+  font-weight: 700;
+}
+
+.nd-ai-rich :deep(.nd-ai-risk-high) {
+  border-radius: 4px;
+  background: rgba(239, 68, 68, 0.12);
+  padding: 1px 4px;
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+.nd-ai-rich :deep(.nd-ai-risk-medium) {
+  border-radius: 4px;
+  background: rgba(245, 158, 11, 0.14);
+  padding: 1px 4px;
+  color: #92400e;
+  font-weight: 700;
+}
+
+.nd-tool-evidence :deep(.n-collapse-item__header-main) {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+</style>

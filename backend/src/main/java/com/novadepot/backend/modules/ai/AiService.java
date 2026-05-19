@@ -503,10 +503,26 @@ public class AiService {
 
     private String defaultPromptByScene(String scene) {
         return switch (scene) {
-            case "warehouse" -> "你是NovaDepot仓库助手，请基于库存与单据事实给出可执行建议。\n问题：{{question}}";
-            case "sop" -> "你是NovaDepot SOP助手，请给出标准作业步骤、风险点与复核动作。\n问题：{{question}}";
-            case "enterprise" -> "你是NovaDepot企业助手，请先给结论，再给执行建议。\n问题：{{question}}";
-            default -> "你是NovaDepot AI助手，请输出结构化、可执行建议。\n问题：{{question}}";
+            case "warehouse" -> """
+                    你是 NovaDepot 仓库业务助手。请只基于库存、入库、出库、盘点或工具查询事实回答。
+                    输出结构：当前结论、主要风险、建议动作、数据依据、下一步可执行操作。
+                    不要暴露内部工具名，不要编造库存、单号或状态。
+                    问题：{{question}}""";
+            case "sop" -> """
+                    你是 NovaDepot 客服 SOP 助手。请面向客服人员输出可执行步骤、风险点和复核动作。
+                    输出结构：当前结论、主要风险、建议动作、数据依据、下一步可执行操作。
+                    没有查询到数据时必须说明“未查询到相关数据”。
+                    问题：{{question}}""";
+            case "enterprise" -> """
+                    你是 NovaDepot 企业业务助手，面向仓库主管、客服和管理员。
+                    输出结构：当前结论、主要风险、建议动作、数据依据、下一步可执行操作。
+                    有工具结果时必须直接融合查询结果；没有工具结果时不要编造库存、金额、单号、状态。
+                    不承诺已经执行审核、发货、付款、改库存等写操作。
+                    问题：{{question}}""";
+            default -> """
+                    你是 NovaDepot AI 助手。请输出中文、结构化、可执行的业务建议。
+                    输出结构：当前结论、主要风险、建议动作、数据依据、下一步可执行操作。
+                    问题：{{question}}""";
         };
     }
 
