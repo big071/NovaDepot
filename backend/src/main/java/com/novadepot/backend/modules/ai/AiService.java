@@ -108,6 +108,7 @@ public class AiService {
         context.put("userId", RequestContext.userId());
         context.put("scene", scene);
         context.put("historyMessages", historyMessages);
+        functionCallingOrchestrator.prepareContext(context);
 
         long started = System.currentTimeMillis();
         Map<String, Object> providerResp;

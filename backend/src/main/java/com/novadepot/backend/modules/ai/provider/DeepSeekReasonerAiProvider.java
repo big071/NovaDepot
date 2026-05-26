@@ -9,6 +9,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
+import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
@@ -45,10 +47,10 @@ public class DeepSeekReasonerAiProvider implements AiProvider {
     @Override
     public Map<String, Object> chat(String scene, String message, Map<String, Object> context) {
         if (!aiProperties.isDeepseekEnabled()) {
-            throw new IllegalStateException("DeepSeek reasoner provider is disabled");
+            fail(context, scene, 0L, "DEEPSEEK_FAILED", null, null);
         }
         if (!StringUtils.hasText(aiProperties.getDeepseekApiKey())) {
-            throw new IllegalStateException("DeepSeek API key is not configured");
+            fail(context, scene, 0L, "DEEPSEEK_UNAUTHORIZED", null, null);
         }
 
         List<Map<String, String>> messages = new ArrayList<>();
@@ -121,8 +123,11 @@ public class DeepSeekReasonerAiProvider implements AiProvider {
                 totalTokens = usage.path("total_tokens").asInt(0);
             }
         } catch (Exception e) {
-            log.warn("DeepSeek reasoner API call failed: {}", e.getMessage());
-            throw new IllegalStateException("DeepSeek reasoner API call failed: " + truncate(e.getMessage(), 256), e);
+            String failedCode = classifyErrorCode(e);
+            Integer statusCode = httpStatus(e);
+            log.warn("DeepSeek reasoner API call failed, errorCode={}, statusCode={}", failedCode, statusCode);
+            fail(context, scene, started, failedCode, statusCode, e);
+            return Map.of();
         }
 
         int latencyMs = (int) (System.currentTimeMillis() - started);
@@ -196,5 +201,65 @@ public class DeepSeekReasonerAiProvider implements AiProvider {
     private String truncate(String text, int maxLen) {
         if (text == null) return null;
         return text.length() <= maxLen ? text : text.substring(0, maxLen);
+    }
+
+    private void fail(Map<String, Object> context,
+                      String scene,
+                      long started,
+                      String errorCode,
+                      Integer statusCode,
+                      Throwable cause) {
+        int latencyMs = started == 0L ? 0 : (int) (System.currentTimeMillis() - started);
+        String safeMessage = deepSeekFailureMessage();
+        saveUsageLog(context, scene, "user", 0, 0, 0, latencyMs,
+                false, errorCode, safeMessage, BigDecimal.ZERO);
+        throw new AiProviderCallException(providerName(), aiProperties.getDeepseekReasonerModel(),
+                errorCode, statusCode, safeMessage, cause);
+    }
+
+    private String classifyErrorCode(Throwable e) {
+        Integer status = httpStatus(e);
+        if (status != null) {
+            if (status == 401 || status == 403) {
+                return "DEEPSEEK_UNAUTHORIZED";
+            }
+            if (status == 408 || status == 504) {
+                return "DEEPSEEK_TIMEOUT";
+            }
+            if (status == 429) {
+                return "DEEPSEEK_QUOTA_EXCEEDED";
+            }
+        }
+        if (e instanceof ResourceAccessException) {
+            return "DEEPSEEK_TIMEOUT";
+        }
+        String text = e.getMessage() == null ? "" : e.getMessage().toLowerCase();
+        if (text.contains("quota") || text.contains("balance") || text.contains("insufficient")) {
+            return "DEEPSEEK_QUOTA_EXCEEDED";
+        }
+        return "DEEPSEEK_FAILED";
+    }
+
+    private Integer httpStatus(Throwable e) {
+        if (e instanceof HttpStatusCodeException http) {
+            return http.getStatusCode().value();
+        }
+        Throwable cause = e.getCause();
+        if (cause instanceof HttpStatusCodeException http) {
+            return http.getStatusCode().value();
+        }
+        return null;
+    }
+
+    private String deepSeekFailureMessage() {
+        return """
+                DeepSeek 调用失败，请检查：
+                1. API Key 是否正确
+                2. AI_DEEPSEEK_ENABLED 是否为 true
+                3. AI_PROVIDER 是否为 deepseek-chat 或 deepseek-reasoner
+                4. 网络是否能访问 DeepSeek
+                5. 账户额度是否充足
+                6. 模型名称是否正确
+                """;
     }
 }

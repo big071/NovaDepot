@@ -144,8 +144,17 @@
                   <h3 class="text-sm font-semibold text-text-primary">{{ section.title }}</h3>
                   <n-tag v-if="section.badge" size="small" :bordered="false" :type="section.badgeType">{{ section.badge }}</n-tag>
                 </div>
-                <ul v-if="section.items.length" class="space-y-2">
-                  <li v-for="itemText in section.items" :key="itemText" class="leading-6" v-html="renderInlineMarkdown(itemText)"></li>
+                <ul v-if="section.items.length" :class="isBusinessCardSection(section) ? 'grid gap-2' : 'space-y-2'">
+                  <li v-for="itemText in section.items" :key="itemText"
+                    :class="isBusinessCardSection(section) ? 'nd-ai-action-card' : 'leading-6'">
+                    <div v-if="isBusinessCardSection(section)" class="flex items-start justify-between gap-2">
+                      <span class="leading-6" v-html="renderInlineMarkdown(itemText)"></span>
+                      <n-tag size="small" :bordered="false" :type="priorityType(itemText)">
+                        {{ priorityLabel(itemText) }}
+                      </n-tag>
+                    </div>
+                    <span v-else v-html="renderInlineMarkdown(itemText)"></span>
+                  </li>
                 </ul>
                 <p v-for="paragraph in section.content" :key="paragraph" class="leading-6" v-html="renderInlineMarkdown(paragraph)"></p>
               </section>
@@ -483,6 +492,23 @@ function sectionBadge(title: string): Pick<RenderedSection, "badge" | "badgeType
   if (title.includes("动作") || title.includes("下一步")) return { badge: "行动", badgeType: "info" };
   if (title.includes("依据")) return { badge: "依据", badgeType: "default" };
   return { badge: "结论", badgeType: "success" };
+}
+
+function isBusinessCardSection(section: RenderedSection) {
+  return section.title.includes("风险") || section.title.includes("建议动作") || section.title.includes("下一步");
+}
+
+function priorityLabel(text: string) {
+  if (/高优先级|高风险|失败|异常|超时|缺货|未查询到相关数据/.test(text)) return "高";
+  if (/中优先级|中风险|待审核|待处理|未关闭|复核/.test(text)) return "中";
+  return "低";
+}
+
+function priorityType(text: string): "default" | "error" | "info" | "success" | "warning" {
+  const label = priorityLabel(text);
+  if (label === "高") return "error";
+  if (label === "中") return "warning";
+  return "info";
 }
 
 function splitLongParagraph(text: string) {
@@ -951,6 +977,13 @@ onMounted(loadConversations);
   padding: 1px 4px;
   color: #92400e;
   font-weight: 700;
+}
+
+.nd-ai-action-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 8px 10px;
 }
 
 .nd-tool-evidence :deep(.n-collapse-item__header-main) {
