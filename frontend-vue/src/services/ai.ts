@@ -10,6 +10,12 @@ export interface AiConfig {
   deepseekReasonerModel: string;
   deepseekApiKeyMasked: string;
   paidEnabled: boolean;
+  fallbackEnabled: boolean;
+  toolsEnabled: boolean;
+  activeModel: string;
+  providerStatus: string;
+  fallbackStatus: string;
+  systemPromptPreview?: string;
 }
 
 export interface AiUsageLog {

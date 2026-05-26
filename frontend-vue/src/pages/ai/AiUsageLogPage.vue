@@ -2,13 +2,47 @@
   <section class="nd-workbench-single">
     <header class="nd-table-head">
       <div>
-        <h1 class="text-xl font-semibold tracking-tight">AI 用量日志</h1>
-        <p class="text-sm text-text-secondary">查看 AI Provider 调用、降级、Token 和延迟记录</p>
+        <h1 class="text-xl font-semibold tracking-tight">AI 用量与配置</h1>
+        <p class="text-sm text-text-secondary">查看 AI Provider、fallback 状态、Token、延迟和失败记录</p>
       </div>
-      <n-button class="nd-soft-focus" size="small" :loading="loading" @click="loadLogs">刷新</n-button>
+      <n-button class="nd-soft-focus" size="small" :loading="loading || loadingConfig" @click="refreshAll">刷新</n-button>
     </header>
 
     <div class="nd-table-body">
+      <section class="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <article class="rounded-lg border border-border bg-surface p-3">
+          <p class="text-xs text-text-secondary">当前 Provider</p>
+          <p class="mt-1 text-base font-semibold text-text-primary">{{ config?.defaultProvider || "-" }}</p>
+          <p class="mt-1 text-xs text-text-secondary">{{ config?.activeModel || "-" }}</p>
+        </article>
+        <article class="rounded-lg border border-border bg-surface p-3">
+          <p class="text-xs text-text-secondary">DeepSeek 状态</p>
+          <n-tag class="mt-2" :bordered="false" :type="config?.deepseekEnabled ? 'success' : 'error'">
+            {{ config?.deepseekEnabled ? "已启用" : "未启用" }}
+          </n-tag>
+          <p class="mt-2 text-xs text-text-secondary">{{ config?.deepseekBaseUrl || "-" }}</p>
+        </article>
+        <article class="rounded-lg border border-border bg-surface p-3">
+          <p class="text-xs text-text-secondary">Fallback 状态</p>
+          <n-tag class="mt-2" :bordered="false" :type="config?.fallbackEnabled ? 'warning' : 'default'">
+            {{ config?.fallbackEnabled ? "允许降级到规则引擎" : "禁用降级，失败直接报错" }}
+          </n-tag>
+        </article>
+        <article class="rounded-lg border border-border bg-surface p-3">
+          <p class="text-xs text-text-secondary">工具调用</p>
+          <n-tag class="mt-2" :bordered="false" :type="config?.toolsEnabled ? 'success' : 'default'">
+            {{ config?.toolsEnabled ? "已启用" : "未启用" }}
+          </n-tag>
+          <p class="mt-2 text-xs text-text-secondary">Key：{{ config?.deepseekApiKeyMasked || "-" }}</p>
+        </article>
+      </section>
+
+      <n-collapse v-if="config?.systemPromptPreview" class="mb-4">
+        <n-collapse-item title="System Prompt 预览" name="prompt">
+          <pre class="whitespace-pre-wrap rounded-lg border border-border bg-bg p-3 text-xs leading-5 text-text-secondary">{{ config.systemPromptPreview }}</pre>
+        </n-collapse-item>
+      </n-collapse>
+
       <div class="mb-4 flex flex-wrap items-center gap-3">
         <n-select v-model:value="providerFilter" class="w-44 nd-soft-focus" size="small" clearable
           placeholder="Provider" :options="providerOptions" />
@@ -23,7 +57,7 @@
 
       <n-empty v-if="!loading && filteredLogs.length === 0" description="暂无 AI 用量记录">
         <template #extra>
-          <p class="text-xs text-text-secondary">使用 AI 助手后，用量和降级记录会显示在这里。</p>
+          <p class="text-xs text-text-secondary">使用 AI 助手后，用量、失败和降级记录会显示在这里。</p>
         </template>
       </n-empty>
 
@@ -35,13 +69,15 @@
 
 <script setup lang="ts">
 import { computed, h, onMounted, ref, watch } from "vue";
-import { NButton, NDataTable, NEmpty, NInputNumber, NSelect, NTag, useMessage } from "naive-ui";
+import { NButton, NCollapse, NCollapseItem, NDataTable, NEmpty, NInputNumber, NSelect, NTag, useMessage } from "naive-ui";
 import type { DataTableColumns, PaginationProps } from "naive-ui";
-import { aiApi, type AiUsageLog } from "@/services/ai";
+import { aiApi, type AiConfig, type AiUsageLog } from "@/services/ai";
 
 const uiMessage = useMessage();
 const loading = ref(false);
+const loadingConfig = ref(false);
 const logs = ref<AiUsageLog[]>([]);
+const config = ref<AiConfig | null>(null);
 const providerFilter = ref<string | null>(null);
 const limit = ref(100);
 
@@ -74,7 +110,7 @@ const pagination: PaginationProps = {
 
 const columns: DataTableColumns<AiUsageLog> = [
   { title: "ID", key: "id", width: 90 },
-  { title: "会话ID", key: "conversationId", width: 100 },
+  { title: "会话 ID", key: "conversationId", width: 100 },
   { title: "Provider", key: "provider", width: 150 },
   { title: "Model", key: "model", width: 170 },
   { title: "场景", key: "scene", width: 100 },
@@ -85,16 +121,17 @@ const columns: DataTableColumns<AiUsageLog> = [
   {
     title: "状态",
     key: "success",
-    width: 90,
+    width: 100,
     render: (row) =>
-      h(NTag, { bordered: false, type: row.success ? "success" : "warning", size: "small" }, () =>
-        row.success ? "成功" : "降级"
+      h(NTag, { bordered: false, type: row.success ? "success" : "error", size: "small" }, () =>
+        row.success ? "成功" : "失败"
       )
   },
+  { title: "错误码", key: "errorCode", width: 150, render: (row) => row.errorCode || "-" },
   {
-    title: "错误/降级原因",
+    title: "失败/降级原因",
     key: "errorMessage",
-    width: 220,
+    width: 240,
     ellipsis: { tooltip: true },
     render: (row) => row.errorMessage || "-"
   },
@@ -109,6 +146,17 @@ const columns: DataTableColumns<AiUsageLog> = [
   }
 ];
 
+async function loadConfig() {
+  loadingConfig.value = true;
+  try {
+    config.value = await aiApi.config();
+  } catch (error) {
+    uiMessage.error(error instanceof Error ? error.message : "AI 配置加载失败");
+  } finally {
+    loadingConfig.value = false;
+  }
+}
+
 async function loadLogs() {
   loading.value = true;
   try {
@@ -120,6 +168,10 @@ async function loadLogs() {
   }
 }
 
+async function refreshAll() {
+  await Promise.all([loadConfig(), loadLogs()]);
+}
+
 watch(limit, loadLogs);
-onMounted(loadLogs);
+onMounted(refreshAll);
 </script>
