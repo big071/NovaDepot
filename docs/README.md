@@ -1,5 +1,11 @@
 # NovaDepot 文档索引
 
+## v1.3 Code Quality & Stability
+
+| 编号 | 文档 | 说明 |
+|---|---|---|
+| 103 | [v1.3 Sprint Q1 Test Baseline and Code Quality Scan](103-v1.3-sprint-q1-test-baseline-and-quality-scan.md) | v1.3 Q1 质量基线、测试地基、扫描结果和 Q2 AiService 拆分建议 |
+
 ## v1.2 DeepSeek Intelligence
 
 | 编号 | 文档 | 说明 |
