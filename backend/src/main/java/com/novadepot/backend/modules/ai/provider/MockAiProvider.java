@@ -12,12 +12,10 @@ public class MockAiProvider implements AiProvider {
     }
 
     @Override
-    public Map<String, Object> chat(String scene, String message, Map<String, Object> context) {
-        return Map.of(
-                "reply", "[Mock] 已收到你的问题：" + message,
-                "scene", scene,
-                "provider", providerName(),
-                "confidence", 0.86
-        );
+    public AiProviderResponse chat(String scene, String message, Map<String, Object> context) {
+        return AiProviderResponse.builder(scene, providerName())
+                .reply("[Mock] 已收到你的问题：" + message)
+                .confidence(0.86)
+                .build();
     }
 }

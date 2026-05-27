@@ -4,6 +4,8 @@ import com.novadepot.backend.common.context.RequestContext;
 import com.novadepot.backend.model.entity.AIConversationEntity;
 import com.novadepot.backend.modules.ai.provider.AiProvider;
 import com.novadepot.backend.modules.ai.provider.AiProviderCallException;
+import com.novadepot.backend.modules.ai.provider.AiProviderResponse;
+import com.novadepot.backend.modules.ai.provider.AiProviderResponseMapper;
 import com.novadepot.backend.modules.ai.tools.AiFunctionCallingOrchestrator;
 import com.novadepot.backend.modules.ai.tools.AiFunctionCallingResult;
 import com.novadepot.backend.modules.knowledge.KnowledgeService;
@@ -29,6 +31,7 @@ public class AiChatService {
     private final AiMessageService messageService;
     private final KnowledgeService knowledgeService;
     private final AiFunctionCallingOrchestrator functionCallingOrchestrator;
+    private final AiProviderResponseMapper providerResponseMapper;
     private final boolean fallbackEnabled;
 
     public AiChatService(AiProviderResolver providerResolver,
@@ -38,6 +41,7 @@ public class AiChatService {
                          AiMessageService messageService,
                          KnowledgeService knowledgeService,
                          AiFunctionCallingOrchestrator functionCallingOrchestrator,
+                         AiProviderResponseMapper providerResponseMapper,
                          @Value("${app.ai.fallback-enabled:false}") boolean fallbackEnabled) {
         this.providerResolver = providerResolver;
         this.promptService = promptService;
@@ -46,6 +50,7 @@ public class AiChatService {
         this.messageService = messageService;
         this.knowledgeService = knowledgeService;
         this.functionCallingOrchestrator = functionCallingOrchestrator;
+        this.providerResponseMapper = providerResponseMapper;
         this.fallbackEnabled = fallbackEnabled;
     }
 
@@ -74,7 +79,7 @@ public class AiChatService {
         functionCallingOrchestrator.prepareContext(context);
 
         long started = System.currentTimeMillis();
-        Map<String, Object> providerResp;
+        AiProviderResponse providerResp;
         List<Map<String, Object>> knowledgeRefs = knowledgeService.matchKnowledge(userMessage, promptService.knowledgeScene(scene));
         String fallbackFrom = null;
         try {
@@ -100,18 +105,20 @@ public class AiChatService {
             usageLogService.saveManualProviderUsageLog(context, scene, provider.providerName(), latencyMs, true, null, null);
         }
 
-        String reply = String.valueOf(providerResp.getOrDefault("reply", "系统繁忙，请稍后重试。"));
+        String reply = providerResp.reply() == null || providerResp.reply().isBlank()
+                ? "系统繁忙，请稍后重试。"
+                : providerResp.reply();
         AiFunctionCallingResult toolResult = functionCallingOrchestrator.run(
                 userMessage, context, providerResp, conversation.getId(), null, "sync-" + System.currentTimeMillis());
         if (toolResult.usedTools()) {
             reply = toolResult.reply();
         }
-        BigDecimal confidence = toBigDecimal(providerResp.get("confidence"));
-        Integer tokens = toInteger(providerResp.get("tokens"));
+        BigDecimal confidence = providerResp.confidence();
+        Integer tokens = providerResp.tokens();
         String errorCode = fallbackFrom == null ? null : "AI_PROVIDER_FALLBACK";
 
         messageService.saveMessage(conversation.getId(), "ASSISTANT", reply, confidence, tokens, latencyMs, errorCode, "COMPLETED");
-        conversationService.touchConversation(conversation, provider.providerName(), providerResp.get("model"));
+        conversationService.touchConversation(conversation, provider.providerName(), providerResp.model());
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("conversationId", conversation.getId());
@@ -125,14 +132,14 @@ public class AiChatService {
         if (fallbackFrom != null) {
             result.put("fallbackFrom", fallbackFrom);
         }
-        if (providerResp.containsKey("metrics")) {
-            result.put("metrics", providerResp.get("metrics"));
+        if (!providerResp.metrics().isEmpty()) {
+            result.put("metrics", providerResp.metrics());
         }
-        if (providerResp.containsKey("suggestions")) {
-            result.put("suggestions", providerResp.get("suggestions"));
+        if (!providerResp.suggestions().isEmpty()) {
+            result.put("suggestions", providerResp.suggestions());
         }
-        if (providerResp.containsKey("usage")) {
-            result.put("usage", providerResp.get("usage"));
+        if (providerResp.usage() != null) {
+            result.put("usage", providerResponseMapper.usageToMap(providerResp.usage()));
         }
         result.put("toolCalls", toolResult.toolCalls());
         result.put("validationWarnings", toolResult.validationWarnings());
@@ -207,53 +214,24 @@ public class AiChatService {
                 """;
     }
 
-    private Map<String, Object> fallbackToMock(String scene,
-                                               String userMessage,
-                                               Map<String, Object> context,
-                                               String reason) {
+    private AiProviderResponse fallbackToMock(String scene,
+                                              String userMessage,
+                                              Map<String, Object> context,
+                                              String reason) {
         AiProvider mock = providerResolver.resolveProvider("mock", scene);
         try {
-            Map<String, Object> fallback = new HashMap<>(mock.chat(scene, userMessage, context));
-            fallback.put("fallbackReason", reason);
-            return fallback;
+            AiProviderResponse fallback = mock.chat(scene, userMessage, context);
+            Map<String, Object> metadata = new HashMap<>(fallback.metadata());
+            metadata.put("fallbackReason", reason);
+            return new AiProviderResponse(fallback.reply(), fallback.scene(), fallback.provider(), fallback.model(),
+                    fallback.confidence(), fallback.tokens(), fallback.success(), fallback.errorCode(),
+                    fallback.errorMessage(), fallback.usage(), fallback.toolCalls(), fallback.metrics(),
+                    fallback.suggestions(), metadata);
         } catch (Exception ignored) {
-            return Map.of(
-                    "reply", "系统繁忙，请稍后重试。",
-                    "scene", scene,
-                    "provider", "system",
-                    "confidence", 0.1
-            );
-        }
-    }
-
-    private BigDecimal toBigDecimal(Object value) {
-        if (value == null) {
-            return null;
-        }
-        if (value instanceof BigDecimal decimal) {
-            return decimal;
-        }
-        if (value instanceof Number number) {
-            return BigDecimal.valueOf(number.doubleValue());
-        }
-        try {
-            return new BigDecimal(value.toString());
-        } catch (Exception ignored) {
-            return null;
-        }
-    }
-
-    private Integer toInteger(Object value) {
-        if (value == null) {
-            return null;
-        }
-        if (value instanceof Number number) {
-            return number.intValue();
-        }
-        try {
-            return Integer.parseInt(value.toString());
-        } catch (Exception ignored) {
-            return null;
+            return AiProviderResponse.builder(scene, "system")
+                    .reply("系统繁忙，请稍后重试。")
+                    .confidence(0.1)
+                    .build();
         }
     }
 }

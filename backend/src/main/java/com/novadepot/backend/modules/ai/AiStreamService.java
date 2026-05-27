@@ -5,6 +5,7 @@ import com.novadepot.backend.model.entity.AIConversationEntity;
 import com.novadepot.backend.model.entity.AIMessageEntity;
 import com.novadepot.backend.modules.ai.provider.AiProvider;
 import com.novadepot.backend.modules.ai.provider.AiProviderCallException;
+import com.novadepot.backend.modules.ai.provider.AiProviderResponse;
 import com.novadepot.backend.modules.ai.tools.AiFunctionCallingOrchestrator;
 import com.novadepot.backend.modules.ai.tools.AiFunctionCallingResult;
 import org.slf4j.Logger;
@@ -14,7 +15,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -120,7 +120,7 @@ public class AiStreamService {
         String providerInput = "rule".equalsIgnoreCase(provider.providerName())
                 ? userMessage
                 : promptService.renderPrompt(scene, userMessage);
-        Map<String, Object> providerResp;
+        AiProviderResponse providerResp;
         String fallbackFrom = null;
         try {
             providerResp = provider.chat(scene, providerInput, context);
@@ -168,7 +168,7 @@ public class AiStreamService {
             sendEvent(emitter, "tool_limit", Map.of("message", "已达到本轮最多 5 次工具调用限制"));
         }
 
-        String reply = String.valueOf(providerResp.getOrDefault("reply", ""));
+        String reply = providerResp.reply() == null ? "" : providerResp.reply();
         if (toolResult.usedTools()) {
             reply = toolResult.reply();
         }
@@ -186,10 +186,10 @@ public class AiStreamService {
             }
             int latencyMs = (int) (System.currentTimeMillis() - started);
             String finalContent = stopped ? streamed.toString() : reply;
-            messageService.updateMessage(assistantMessage, finalContent, toBigDecimal(providerResp.get("confidence")),
-                    toInteger(providerResp.get("tokens")), latencyMs, fallbackFrom == null ? null : "AI_PROVIDER_FALLBACK",
+            messageService.updateMessage(assistantMessage, finalContent, providerResp.confidence(),
+                    providerResp.tokens(), latencyMs, fallbackFrom == null ? null : "AI_PROVIDER_FALLBACK",
                     stopped ? "STOPPED" : "COMPLETED");
-            conversationService.touchConversation(conversation, provider.providerName(), providerResp.get("model"));
+            conversationService.touchConversation(conversation, provider.providerName(), providerResp.model());
             if (stopped) {
                 sendEvent(emitter, "status", Map.of("status", "STOPPED"));
             }
@@ -245,53 +245,24 @@ public class AiStreamService {
                 """;
     }
 
-    private Map<String, Object> fallbackToMock(String scene,
-                                               String userMessage,
-                                               Map<String, Object> context,
-                                               String reason) {
+    private AiProviderResponse fallbackToMock(String scene,
+                                              String userMessage,
+                                              Map<String, Object> context,
+                                              String reason) {
         AiProvider mock = providerResolver.resolveProvider("mock", scene);
         try {
-            Map<String, Object> fallback = new HashMap<>(mock.chat(scene, userMessage, context));
-            fallback.put("fallbackReason", reason);
-            return fallback;
+            AiProviderResponse fallback = mock.chat(scene, userMessage, context);
+            Map<String, Object> metadata = new HashMap<>(fallback.metadata());
+            metadata.put("fallbackReason", reason);
+            return new AiProviderResponse(fallback.reply(), fallback.scene(), fallback.provider(), fallback.model(),
+                    fallback.confidence(), fallback.tokens(), fallback.success(), fallback.errorCode(),
+                    fallback.errorMessage(), fallback.usage(), fallback.toolCalls(), fallback.metrics(),
+                    fallback.suggestions(), metadata);
         } catch (Exception ignored) {
-            return Map.of(
-                    "reply", "系统繁忙，请稍后重试。",
-                    "scene", scene,
-                    "provider", "system",
-                    "confidence", 0.1
-            );
-        }
-    }
-
-    private BigDecimal toBigDecimal(Object value) {
-        if (value == null) {
-            return null;
-        }
-        if (value instanceof BigDecimal decimal) {
-            return decimal;
-        }
-        if (value instanceof Number number) {
-            return BigDecimal.valueOf(number.doubleValue());
-        }
-        try {
-            return new BigDecimal(value.toString());
-        } catch (Exception ignored) {
-            return null;
-        }
-    }
-
-    private Integer toInteger(Object value) {
-        if (value == null) {
-            return null;
-        }
-        if (value instanceof Number number) {
-            return number.intValue();
-        }
-        try {
-            return Integer.parseInt(value.toString());
-        } catch (Exception ignored) {
-            return null;
+            return AiProviderResponse.builder(scene, "system")
+                    .reply("系统繁忙，请稍后重试。")
+                    .confidence(0.1)
+                    .build();
         }
     }
 

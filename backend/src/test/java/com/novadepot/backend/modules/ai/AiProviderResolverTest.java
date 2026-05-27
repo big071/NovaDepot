@@ -2,6 +2,7 @@ package com.novadepot.backend.modules.ai;
 
 import com.novadepot.backend.common.exception.BizException;
 import com.novadepot.backend.modules.ai.provider.AiProvider;
+import com.novadepot.backend.modules.ai.provider.AiProviderResponse;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -42,8 +43,8 @@ class AiProviderResolverTest {
             }
 
             @Override
-            public Map<String, Object> chat(String scene, String message, Map<String, Object> context) {
-                return Map.of();
+            public AiProviderResponse chat(String scene, String message, Map<String, Object> context) {
+                return AiProviderResponse.builder(scene, providerName()).build();
             }
         };
         AiProviderResolver resolver = new AiProviderResolver(List.of(warehouseOnly), "deepseek-chat", true);
@@ -72,8 +73,8 @@ class AiProviderResolverTest {
             }
 
             @Override
-            public Map<String, Object> chat(String scene, String message, Map<String, Object> context) {
-                return Map.of();
+            public AiProviderResponse chat(String scene, String message, Map<String, Object> context) {
+                return AiProviderResponse.builder(scene, providerName()).build();
             }
         };
     }

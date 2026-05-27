@@ -46,7 +46,7 @@ public class DeepSeekChatAiProvider implements AiProvider {
     }
 
     @Override
-    public Map<String, Object> chat(String scene, String message, Map<String, Object> context) {
+    public AiProviderResponse chat(String scene, String message, Map<String, Object> context) {
         if (!aiProperties.isDeepseekEnabled()) {
             fail(context, scene, 0L, "DEEPSEEK_FAILED", null, null);
         }
@@ -99,7 +99,7 @@ public class DeepSeekChatAiProvider implements AiProvider {
         Integer promptTokens = 0;
         Integer completionTokens = 0;
         Integer totalTokens = 0;
-        List<Map<String, Object>> toolCalls = new ArrayList<>();
+        List<AiProviderToolCall> toolCalls = new ArrayList<>();
 
         try {
             String responseJson = deepseekRestClient.post()
@@ -116,9 +116,9 @@ public class DeepSeekChatAiProvider implements AiProvider {
                 for (JsonNode node : toolCallNodes) {
                     JsonNode fn = node.path("function");
                     if (StringUtils.hasText(fn.path("name").asText())) {
-                        toolCalls.add(Map.of(
-                                "name", fn.path("name").asText(),
-                                "arguments", fn.path("arguments").asText("{}")
+                        toolCalls.add(AiProviderToolCall.request(
+                                fn.path("name").asText(),
+                                fn.path("arguments").asText("{}")
                         ));
                     }
                 }
@@ -134,7 +134,7 @@ public class DeepSeekChatAiProvider implements AiProvider {
             Integer statusCode = httpStatus(e);
             log.warn("DeepSeek chat API call failed, errorCode={}, statusCode={}", failedCode, statusCode);
             fail(context, scene, started, failedCode, statusCode, e);
-            return Map.of();
+            return AiProviderResponse.builder(scene, providerName()).success(false).build();
         }
 
         int latencyMs = (int) (System.currentTimeMillis() - started);
@@ -146,22 +146,14 @@ public class DeepSeekChatAiProvider implements AiProvider {
 
         BigDecimal confidence = BigDecimal.valueOf(0.88);
 
-        Map<String, Object> result = new HashMap<>();
-        result.put("reply", reply);
-        result.put("scene", scene);
-        result.put("provider", providerName());
-        result.put("confidence", confidence);
-        result.put("model", aiProperties.getDeepseekChatModel());
-        result.put("tokens", totalTokens);
-        result.put("toolCalls", toolCalls);
-        result.put("usage", Map.of(
-                "promptTokens", promptTokens,
-                "completionTokens", completionTokens,
-                "totalTokens", totalTokens,
-                "latencyMs", latencyMs,
-                "costEstimate", costEstimate
-        ));
-        return result;
+        return AiProviderResponse.builder(scene, providerName())
+                .reply(reply)
+                .confidence(confidence)
+                .model(aiProperties.getDeepseekChatModel())
+                .tokens(totalTokens)
+                .toolCalls(toolCalls)
+                .usage(new AiProviderUsage(promptTokens, completionTokens, totalTokens, latencyMs, costEstimate))
+                .build();
     }
 
     @SuppressWarnings("unchecked")

@@ -12,13 +12,11 @@ public class PaidAiProvider implements AiProvider {
     }
 
     @Override
-    public Map<String, Object> chat(String scene, String message, Map<String, Object> context) {
-        return Map.of(
-                "reply", "[PaidProvider Placeholder] " + message,
-                "scene", scene,
-                "provider", providerName(),
-                "confidence", 0.92,
-                "model", "paid-placeholder"
-        );
+    public AiProviderResponse chat(String scene, String message, Map<String, Object> context) {
+        return AiProviderResponse.builder(scene, providerName())
+                .reply("[PaidProvider Placeholder] " + message)
+                .confidence(0.92)
+                .model("paid-placeholder")
+                .build();
     }
 }

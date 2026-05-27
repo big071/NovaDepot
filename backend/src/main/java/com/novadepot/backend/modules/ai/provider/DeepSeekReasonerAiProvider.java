@@ -45,7 +45,7 @@ public class DeepSeekReasonerAiProvider implements AiProvider {
     }
 
     @Override
-    public Map<String, Object> chat(String scene, String message, Map<String, Object> context) {
+    public AiProviderResponse chat(String scene, String message, Map<String, Object> context) {
         if (!aiProperties.isDeepseekEnabled()) {
             fail(context, scene, 0L, "DEEPSEEK_FAILED", null, null);
         }
@@ -127,7 +127,7 @@ public class DeepSeekReasonerAiProvider implements AiProvider {
             Integer statusCode = httpStatus(e);
             log.warn("DeepSeek reasoner API call failed, errorCode={}, statusCode={}", failedCode, statusCode);
             fail(context, scene, started, failedCode, statusCode, e);
-            return Map.of();
+            return AiProviderResponse.builder(scene, providerName()).success(false).build();
         }
 
         int latencyMs = (int) (System.currentTimeMillis() - started);
@@ -139,21 +139,13 @@ public class DeepSeekReasonerAiProvider implements AiProvider {
 
         BigDecimal confidence = success ? BigDecimal.valueOf(0.90) : BigDecimal.valueOf(0.1);
 
-        return Map.of(
-                "reply", reply,
-                "scene", scene,
-                "provider", providerName(),
-                "confidence", confidence,
-                "model", aiProperties.getDeepseekReasonerModel(),
-                "tokens", totalTokens,
-                "usage", Map.of(
-                        "promptTokens", promptTokens,
-                        "completionTokens", completionTokens,
-                        "totalTokens", totalTokens,
-                        "latencyMs", latencyMs,
-                        "costEstimate", costEstimate
-                )
-        );
+        return AiProviderResponse.builder(scene, providerName())
+                .reply(reply)
+                .confidence(confidence)
+                .model(aiProperties.getDeepseekReasonerModel())
+                .tokens(totalTokens)
+                .usage(new AiProviderUsage(promptTokens, completionTokens, totalTokens, latencyMs, costEstimate))
+                .build();
     }
 
     @SuppressWarnings("unchecked")
