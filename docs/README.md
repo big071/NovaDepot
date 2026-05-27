@@ -7,6 +7,7 @@
 | 103 | [v1.3 Sprint Q1 Test Baseline and Code Quality Scan](103-v1.3-sprint-q1-test-baseline-and-quality-scan.md) | v1.3 Q1 质量基线、测试地基、扫描结果和 Q2 AiService 拆分建议 |
 | 104 | [v1.3 Sprint Q2 AiService Decomposition Plan](104-v1.3-ai-service-decomposition-plan.md) | v1.3 Q2 AiService 拆分执行计划、测试保护和验收标准 |
 | 105 | [v1.3 Sprint Q3 AiProvider Type Safety Plan](105-v1.3-ai-provider-type-safety-plan.md) | v1.3 Q3 AiProvider Type Safety DTO migration plan |
+| 106 | [v1.3 Sprint Q4 CSV Import and Pagination Performance](106-v1.3-csv-import-pagination-performance-plan.md) | v1.3 Q4 CSV import preload, pagination risk, and limit replacement plan |
 
 ## v1.2 DeepSeek Intelligence
 

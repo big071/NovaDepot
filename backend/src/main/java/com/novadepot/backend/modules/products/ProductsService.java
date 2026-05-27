@@ -13,11 +13,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.StringJoiner;
+import java.util.stream.Collectors;
 
 @Service
 public class ProductsService {
@@ -139,6 +142,7 @@ public class ProductsService {
             throw new BizException(ErrorCode.BIZ_ERROR.code(), "CSV header must contain Chinese columns: 商品编码, 商品名称");
         }
         CsvImportResult result = new CsvImportResult(lines.length - 1);
+        Map<String, ProductEntity> productsByCode = preloadProductsByCode(lines);
         for (int i = 1; i < lines.length; i++) {
             String line = lines[i];
             if (line == null || line.trim().isBlank()) continue;
@@ -168,7 +172,7 @@ public class ProductsService {
                 result.addError(i + 1, "启用批次/保质期天数/状态", "字段格式非法", line);
                 continue;
             }
-            ProductEntity existed = detailByCode(code);
+            ProductEntity existed = productsByCode.get(code);
             if (existed != null) {
                 result.skippedRows++;
                 result.addError(i + 1, "商品编码", "SKU 已存在，已跳过", code);
@@ -188,9 +192,29 @@ public class ProductsService {
             entity.setCreatedBy(RequestContext.userId());
             entity.setUpdatedBy(RequestContext.userId());
             productMapper.insert(entity);
+            productsByCode.put(code, entity);
             result.successRows++;
         }
         return result;
+    }
+
+    private Map<String, ProductEntity> preloadProductsByCode(String[] lines) {
+        Set<String> codes = java.util.Arrays.stream(lines)
+                .skip(1)
+                .filter(line -> line != null && !line.trim().isBlank())
+                .map(line -> line.split(",", -1))
+                .filter(cols -> cols.length >= 1)
+                .map(cols -> unquote(cols[0]))
+                .filter(code -> code != null && !code.isBlank())
+                .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
+        if (codes.isEmpty()) {
+            return new HashMap<>();
+        }
+        return productMapper.selectList(new LambdaQueryWrapper<ProductEntity>()
+                        .eq(ProductEntity::getTenantId, RequestContext.tenantId())
+                        .in(ProductEntity::getProductCode, codes))
+                .stream()
+                .collect(Collectors.toMap(ProductEntity::getProductCode, item -> item, (a, b) -> a, HashMap::new));
     }
 
     private String[] normalizeLines(String csvContent) {
