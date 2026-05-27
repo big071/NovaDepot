@@ -5,6 +5,7 @@
 | 编号 | 文档 | 说明 |
 |---|---|---|
 | 103 | [v1.3 Sprint Q1 Test Baseline and Code Quality Scan](103-v1.3-sprint-q1-test-baseline-and-quality-scan.md) | v1.3 Q1 质量基线、测试地基、扫描结果和 Q2 AiService 拆分建议 |
+| 104 | [v1.3 Sprint Q2 AiService Decomposition Plan](104-v1.3-ai-service-decomposition-plan.md) | v1.3 Q2 AiService 拆分执行计划、测试保护和验收标准 |
 
 ## v1.2 DeepSeek Intelligence
 
