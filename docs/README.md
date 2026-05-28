@@ -9,6 +9,7 @@
 | 105 | [v1.3 Sprint Q3 AiProvider Type Safety Plan](105-v1.3-ai-provider-type-safety-plan.md) | v1.3 Q3 AiProvider Type Safety DTO migration plan |
 | 106 | [v1.3 Sprint Q4 CSV Import and Pagination Performance](106-v1.3-csv-import-pagination-performance-plan.md) | v1.3 Q4 CSV import preload, pagination risk, and limit replacement plan |
 | 107 | [v1.3 Sprint Q5 Security Hardening](107-v1.3-security-hardening-plan.md) | v1.3 Q5 JWT, secrets, login rate limit, request size, CORS, and error masking plan |
+| 108 | [v1.3 Sprint Q6 Frontend Component and Type Safety Cleanup](108-v1.3-frontend-component-type-safety-plan.md) | v1.3 Q6 AI page component split, TypeScript cleanup, and Vitest foundation |
 
 ## v1.2 DeepSeek Intelligence
 

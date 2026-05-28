@@ -161,7 +161,7 @@ import { computed, onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import { NAlert, NButton, NDataTable, NInput, NModal, NPagination, NSelect, NTag, useMessage } from "naive-ui";
 import type { DataTableColumns } from "naive-ui";
-import { csApi, type CsAiSuggestion, type CsMessage, type CsSession, type CsTicket, type TicketTimelineResp } from "@/services/customerService";
+import { csApi, type CsAiSuggestion, type CsMessage, type CsSession, type CsTicket, type TicketTimelineItem, type TicketTimelineResp } from "@/services/customerService";
 import { knowledgeApi } from "@/services/knowledge";
 
 const router = useRouter();
@@ -199,11 +199,11 @@ const priorityOptions = [
 const activeSession = computed(() => sessions.value.find((v) => v.id === activeSessionId.value) || null);
 const suggestionFirst = computed(() => (aiSuggestion.value?.replyCandidates || [])[0] || "");
 
-const timelineColumns: DataTableColumns = [
+const timelineColumns: DataTableColumns<TicketTimelineItem> = [
   { title: "操作时间", key: "occurredAt", width: 180 },
   { title: "操作人", key: "operatorName", width: 120 },
   { title: "动作", key: "actionLabel", width: 150 },
-  { title: "状态变化", key: "status", width: 180, render: (row: any) => `${row.statusFrom || "-"} -> ${row.statusTo || "-"}` },
+  { title: "状态变化", key: "status", width: 180, render: (row) => `${row.statusFrom || "-"} -> ${row.statusTo || "-"}` },
   { title: "备注/意见", key: "note" }
 ];
 

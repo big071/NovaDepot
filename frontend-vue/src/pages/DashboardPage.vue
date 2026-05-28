@@ -78,7 +78,10 @@ const subtitle = computed(() => {
 });
 
 const todoCards = computed(() => {
-  const t = data.todos as Record<string, any>;
+  const t = data.todos as Record<string, number> & {
+    riskSummary?: Record<string, number>;
+    todayOverview?: Record<string, number>;
+  };
   if (data.roleKey === "admin") {
     return [
       { key: "pendingInboundApproval", label: "待审核入库单", value: t.pendingInboundApproval ?? 0 },

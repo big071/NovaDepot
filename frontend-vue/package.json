@@ -8,6 +8,7 @@
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview --host 0.0.0.0 --port 4173",
     "typecheck": "vue-tsc --noEmit",
+    "test:unit": "vitest run",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:install": "playwright install --with-deps chromium"
@@ -25,11 +26,14 @@
     "@playwright/test": "^1.59.1",
     "@types/node": "^22.7.5",
     "@vitejs/plugin-vue": "^5.1.4",
+    "@vue/test-utils": "^2.4.10",
     "autoprefixer": "^10.4.20",
+    "jsdom": "^29.1.1",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.13",
     "typescript": "^5.6.3",
     "vite": "^5.4.8",
+    "vitest": "^4.1.7",
     "vue-tsc": "^2.1.6"
   }
 }
