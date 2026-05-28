@@ -63,6 +63,25 @@ AI_TOOLS_ENABLED=true
 AI_FALLBACK_ENABLED=false
 ```
 
+## Security Configuration
+
+Local Docker uses development-only defaults so the demo can start with one command.
+For any shared or production-like deployment, override these values through `.env`
+or the host environment and never commit the real values:
+
+```env
+JWT_SECRET=replace-with-at-least-32-random-characters
+DB_PASSWORD=replace-with-a-real-database-password
+AI_DEEPSEEK_API_KEY=
+APP_CORS_ALLOWED_ORIGINS=http://localhost:3100,http://127.0.0.1:3100
+APP_UPLOAD_MAX_FILE_SIZE=10MB
+APP_UPLOAD_MAX_REQUEST_SIZE=10MB
+APP_MAX_REQUEST_BODY_BYTES=10485760
+```
+
+`JWT_SECRET` must be at least 32 characters. `.env` files and real API keys,
+database passwords, JWT secrets, and access tokens must stay out of Git.
+
 For v1.2.1, RuleProvider is used only when `AI_PROVIDER=rule`, or when fallback is explicitly enabled with `AI_FALLBACK_ENABLED=true`. If `AI_PROVIDER=deepseek-chat`, `AI_DEEPSEEK_ENABLED=true`, and fallback is disabled, DeepSeek failures are reported clearly in the UI and recorded in `ai_usage_logs` with `success=0` and an error code.
 
 ## Common Commands

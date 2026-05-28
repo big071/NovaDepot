@@ -16,7 +16,7 @@ app:
     enabled: ${APP_BILLING_ENABLED:false}
   plan-enforce-enabled: ${APP_PLAN_ENFORCE_ENABLED:false}
   jwt:
-    secret: ${JWT_SECRET:change_me_in_prod}
+    secret: ${JWT_SECRET:}
     expire-seconds: ${JWT_EXPIRE_SECONDS:7200}
   auth:
     password:

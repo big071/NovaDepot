@@ -2,6 +2,7 @@ package com.novadepot.backend.common.exception;
 
 import com.novadepot.backend.common.api.ApiResponse;
 import com.novadepot.backend.common.enums.ErrorCode;
+import com.novadepot.backend.common.utils.SensitiveDataMasker;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.util.stream.Collectors;
 
@@ -24,8 +26,9 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BizException.class)
     public ResponseEntity<ApiResponse<Void>> handleBiz(BizException ex) {
         HttpStatus status = resolveStatus(ex.getCode());
-        log.warn("biz exception code={}, message={}, traceId={}", ex.getCode(), ex.getMessage(), traceId());
-        return ResponseEntity.status(status).body(ApiResponse.error(ex.getCode(), ex.getMessage(), traceId()));
+        String safeMessage = SensitiveDataMasker.mask(ex.getMessage());
+        log.warn("biz exception code={}, message={}, traceId={}", ex.getCode(), safeMessage, traceId());
+        return ResponseEntity.status(status).body(ApiResponse.error(ex.getCode(), safeMessage, traceId()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -42,7 +45,14 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ConstraintViolationException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiResponse<Void> handleConstraint(ConstraintViolationException ex) {
-        return ApiResponse.error(ErrorCode.VALIDATION_ERROR.code(), ex.getMessage(), traceId());
+        return ApiResponse.error(ErrorCode.VALIDATION_ERROR.code(), SensitiveDataMasker.mask(ex.getMessage()), traceId());
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    @ResponseStatus(HttpStatus.PAYLOAD_TOO_LARGE)
+    public ApiResponse<Void> handleMaxUploadSize(MaxUploadSizeExceededException ex) {
+        log.warn("upload too large, traceId={}", traceId());
+        return ApiResponse.error(ErrorCode.VALIDATION_ERROR.code(), "Request body is too large", traceId());
     }
 
     @ExceptionHandler(AccessDeniedException.class)
