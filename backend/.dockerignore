@@ -2,3 +2,8 @@ target
 .idea
 .git
 *.iml
+.env
+*.env
+*.log
+test-results
+tmp

@@ -3,4 +3,11 @@ dist
 .vscode
 .env
 .env.local
+*.env
 npm-debug.log*
+*.log
+test-results
+playwright-report
+.cache
+.vite
+tmp
