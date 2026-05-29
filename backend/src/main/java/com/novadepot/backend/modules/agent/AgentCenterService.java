@@ -211,12 +211,13 @@ public class AgentCenterService {
         LambdaQueryWrapper<AgentTaskRunEntity> countQw = runFilter(taskCode, status);
         Long total = agentTaskRunMapper.selectCount(countQw);
 
-        LambdaQueryWrapper<AgentTaskRunEntity> listQw = runFilter(taskCode, status)
-                .orderByDesc(AgentTaskRunEntity::getStartedAt)
-                .orderByDesc(AgentTaskRunEntity::getId)
-                .last("limit " + offset + "," + safePageSize);
-
-        List<Map<String, Object>> list = agentTaskRunMapper.selectList(listQw).stream()
+        List<Map<String, Object>> list = agentTaskRunMapper.selectRunsPage(
+                        RequestContext.tenantId(),
+                        StringUtils.hasText(taskCode) ? normalizeTaskCode(taskCode) : null,
+                        StringUtils.hasText(status) ? status.trim().toUpperCase(Locale.ROOT) : null,
+                        offset,
+                        safePageSize)
+                .stream()
                 .map(this::runToSimple)
                 .toList();
 
@@ -251,11 +252,7 @@ public class AgentCenterService {
         BigDecimal threshold = (BigDecimal) params.get("lowStockThreshold");
 
         List<InventoryEntity> lowRows = doStep(steps, "read", "读取低库存", () ->
-                        inventoryMapper.selectList(new LambdaQueryWrapper<InventoryEntity>()
-                                .eq(InventoryEntity::getTenantId, RequestContext.tenantId())
-                                .le(InventoryEntity::getAvailableQty, threshold)
-                                .orderByAsc(InventoryEntity::getAvailableQty)
-                                .last("limit 300")),
+                        inventoryMapper.selectLowAvailable(RequestContext.tenantId(), threshold, 300),
                 rows -> "低库存记录 " + rows.size() + " 条");
 
         Set<Long> productIds = lowRows.stream().map(InventoryEntity::getProductId).collect(Collectors.toSet());
@@ -309,10 +306,7 @@ public class AgentCenterService {
                 value -> "趋势窗口: " + value + " 天");
 
         List<InventoryEntity> rows = doStep(steps, "read", "读取库存与低库存记录", () ->
-                        inventoryMapper.selectList(new LambdaQueryWrapper<InventoryEntity>()
-                                .eq(InventoryEntity::getTenantId, RequestContext.tenantId())
-                                .orderByAsc(InventoryEntity::getAvailableQty)
-                                .last("limit 500")),
+                        inventoryMapper.selectLowestAvailable(RequestContext.tenantId(), 500),
                 value -> "库存记录 " + value.size() + " 条");
 
         Set<Long> productIds = rows.stream().map(InventoryEntity::getProductId).collect(Collectors.toSet());
@@ -364,18 +358,11 @@ public class AgentCenterService {
         BigDecimal threshold = readDecimal(target.get("lowStockThreshold"), knowledgeService.decimalRule("LOW_STOCK_DEFAULT_THRESHOLD", BigDecimal.TEN));
 
         List<InventoryEntity> negative = doStep(steps, "read", "巡检负库存", () ->
-                        inventoryMapper.selectList(new LambdaQueryWrapper<InventoryEntity>()
-                                .eq(InventoryEntity::getTenantId, RequestContext.tenantId())
-                                .lt(InventoryEntity::getAvailableQty, BigDecimal.ZERO)
-                                .last("limit 200")),
+                        inventoryMapper.selectNegativeAvailable(RequestContext.tenantId(), 200),
                 rows -> "负库存记录 " + rows.size() + " 条");
 
         List<InventoryEntity> lowStock = doStep(steps, "read", "巡检低库存", () ->
-                        inventoryMapper.selectList(new LambdaQueryWrapper<InventoryEntity>()
-                                .eq(InventoryEntity::getTenantId, RequestContext.tenantId())
-                                .le(InventoryEntity::getAvailableQty, threshold)
-                                .orderByAsc(InventoryEntity::getAvailableQty)
-                                .last("limit 300")),
+                        inventoryMapper.selectLowAvailable(RequestContext.tenantId(), threshold, 300),
                 rows -> "低库存记录 " + rows.size() + " 条");
 
         LocalDateTime before = LocalDateTime.now().minusDays(staleDays);
@@ -500,19 +487,11 @@ public class AgentCenterService {
                 value -> "输出条数: " + value);
 
         List<CustomerServiceTicketEntity> tickets = doStep(steps, "read", "读取待处理工单", () ->
-                        customerServiceTicketMapper.selectList(new LambdaQueryWrapper<CustomerServiceTicketEntity>()
-                                .eq(CustomerServiceTicketEntity::getTenantId, RequestContext.tenantId())
-                                .in(CustomerServiceTicketEntity::getStatus, List.of("OPEN", "PROCESSING"))
-                                .orderByDesc(CustomerServiceTicketEntity::getCreatedAt)
-                                .last("limit 200")),
+                        customerServiceTicketMapper.selectOpenForAgent(RequestContext.tenantId(), 200),
                 value -> "待处理工单 " + value.size() + " 条");
 
         List<FAQKnowledgeEntity> faqList = doStep(steps, "read", "读取FAQ知识库", () ->
-                        faqKnowledgeMapper.selectList(new LambdaQueryWrapper<FAQKnowledgeEntity>()
-                                .eq(FAQKnowledgeEntity::getTenantId, RequestContext.tenantId())
-                                .eq(FAQKnowledgeEntity::getEnabled, 1)
-                                .orderByDesc(FAQKnowledgeEntity::getPriority)
-                                .last("limit 100")),
+                        faqKnowledgeMapper.selectEnabledByPriority(RequestContext.tenantId(), 100),
                 value -> "FAQ " + value.size() + " 条");
 
         return doStep(steps, "analyze", "生成工单处理建议", () -> {
@@ -558,11 +537,7 @@ public class AgentCenterService {
         }, value -> "主题: " + value);
 
         List<FAQKnowledgeEntity> faqList = doStep(steps, "read", "读取相关FAQ", () ->
-                        faqKnowledgeMapper.selectList(new LambdaQueryWrapper<FAQKnowledgeEntity>()
-                                .eq(FAQKnowledgeEntity::getTenantId, RequestContext.tenantId())
-                                .eq(FAQKnowledgeEntity::getEnabled, 1)
-                                .orderByDesc(FAQKnowledgeEntity::getPriority)
-                                .last("limit 100")),
+                        faqKnowledgeMapper.selectEnabledByPriority(RequestContext.tenantId(), 100),
                 value -> "FAQ " + value.size() + " 条");
 
         return doStep(steps, "analyze", "生成SOP建议", () -> {

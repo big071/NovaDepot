@@ -7,7 +7,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -38,7 +38,7 @@ class AiPromptServiceTest {
         RequestContext.setTenantId(1L);
         AIPromptTemplateEntity template = new AIPromptTemplateEntity();
         template.setTemplateContent("模板问题：{{question}}");
-        when(promptTemplateMapper.selectOne(any())).thenReturn(template);
+        when(promptTemplateMapper.selectLatestEnabled(eq(1L), eq("enterprise"))).thenReturn(template);
 
         assertThat(promptService.renderPrompt("enterprise", "库存怎么样"))
                 .isEqualTo("模板问题：库存怎么样");
@@ -49,7 +49,7 @@ class AiPromptServiceTest {
         RequestContext.setTenantId(1L);
         AIPromptTemplateEntity template = new AIPromptTemplateEntity();
         template.setTemplateContent("固定模板");
-        when(promptTemplateMapper.selectOne(any())).thenReturn(template);
+        when(promptTemplateMapper.selectLatestEnabled(eq(1L), eq("enterprise"))).thenReturn(template);
 
         assertThat(promptService.renderPrompt("enterprise", "库存怎么样"))
                 .isEqualTo("固定模板\n用户问题：库存怎么样");
@@ -58,7 +58,7 @@ class AiPromptServiceTest {
     @Test
     void renderPrompt_usesCurrentEnterpriseDefaultPromptWhenNoTemplate() {
         RequestContext.setTenantId(1L);
-        when(promptTemplateMapper.selectOne(any())).thenReturn(null);
+        when(promptTemplateMapper.selectLatestEnabled(eq(1L), eq("enterprise"))).thenReturn(null);
 
         String prompt = promptService.renderPrompt("enterprise", "库存怎么样");
 

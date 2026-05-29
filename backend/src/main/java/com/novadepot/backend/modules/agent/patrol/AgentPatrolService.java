@@ -70,10 +70,7 @@ public class AgentPatrolService {
     public Map<String, Object> runLowStockPatrol() {
         withSystemContext();
         auditLogRecordService.record("AGENT_PATROL", "LOW_STOCK_START", "AGENT_PATROL", "LOW_STOCK", null, null, "{}");
-        List<InventoryEntity> rows = inventoryMapper.selectList(new LambdaQueryWrapper<InventoryEntity>()
-                .eq(InventoryEntity::getTenantId, RequestContext.tenantId())
-                .orderByAsc(InventoryEntity::getAvailableQty)
-                .last("limit 500"));
+        List<InventoryEntity> rows = inventoryMapper.selectLowestAvailable(RequestContext.tenantId(), 500);
         Map<Long, ProductEntity> productMap = lowStockPolicyService.buildProductMapFromInventory(rows);
         List<InventoryEntity> lowRows = rows.stream()
                 .filter(row -> lowStockPolicyService.isLowStock(row, productMap))
@@ -104,12 +101,7 @@ public class AgentPatrolService {
     public Map<String, Object> runTicketOverduePatrol(int overdueHours) {
         withSystemContext();
         LocalDateTime cutoff = LocalDateTime.now().minusHours(Math.max(1, overdueHours));
-        List<CustomerServiceTicketEntity> tickets = customerServiceTicketMapper.selectList(new LambdaQueryWrapper<CustomerServiceTicketEntity>()
-                .eq(CustomerServiceTicketEntity::getTenantId, RequestContext.tenantId())
-                .in(CustomerServiceTicketEntity::getStatus, List.of("OPEN", "PROCESSING"))
-                .le(CustomerServiceTicketEntity::getCreatedAt, cutoff)
-                .orderByAsc(CustomerServiceTicketEntity::getCreatedAt)
-                .last("limit 50"));
+        List<CustomerServiceTicketEntity> tickets = customerServiceTicketMapper.selectOverdueForPatrol(RequestContext.tenantId(), cutoff, 50);
         int created = 0;
         for (CustomerServiceTicketEntity ticket : tickets) {
             created += notifyUsers("TICKET_OVERDUE_PATROL", "CS_TICKET", ticket.getTicketNo(),
@@ -123,44 +115,28 @@ public class AgentPatrolService {
     }
 
     private int notifyInbound(LocalDateTime cutoff) {
-        return inboundOrderMapper.selectList(new LambdaQueryWrapper<InboundOrderEntity>()
-                .eq(InboundOrderEntity::getTenantId, RequestContext.tenantId())
-                .in(InboundOrderEntity::getStatus, List.of("SUBMITTED", "APPROVED"))
-                .le(InboundOrderEntity::getCreatedAt, cutoff)
-                .last("limit 50"))
+        return inboundOrderMapper.selectOverdueForPatrol(RequestContext.tenantId(), cutoff, 50)
                 .stream()
                 .mapToInt(row -> notifyUsers("ORDER_OVERDUE_PATROL", "INBOUND_ORDER", row.getInboundNo(), "入库单超时提醒", "入库单 " + row.getInboundNo() + " 待处理已超时。", "WARNING", "/wms/inbound"))
                 .sum();
     }
 
     private int notifyOutbound(LocalDateTime cutoff) {
-        return outboundOrderMapper.selectList(new LambdaQueryWrapper<OutboundOrderEntity>()
-                .eq(OutboundOrderEntity::getTenantId, RequestContext.tenantId())
-                .in(OutboundOrderEntity::getStatus, List.of("SUBMITTED", "APPROVED"))
-                .le(OutboundOrderEntity::getCreatedAt, cutoff)
-                .last("limit 50"))
+        return outboundOrderMapper.selectOverdueForPatrol(RequestContext.tenantId(), cutoff, 50)
                 .stream()
                 .mapToInt(row -> notifyUsers("ORDER_OVERDUE_PATROL", "OUTBOUND_ORDER", row.getOutboundNo(), "出库单超时提醒", "出库单 " + row.getOutboundNo() + " 待处理已超时。", "WARNING", "/wms/outbound"))
                 .sum();
     }
 
     private int notifyPurchase(LocalDateTime cutoff) {
-        return purchaseOrderMapper.selectList(new LambdaQueryWrapper<PurchaseOrderEntity>()
-                .eq(PurchaseOrderEntity::getTenantId, RequestContext.tenantId())
-                .in(PurchaseOrderEntity::getStatus, List.of("DRAFT", "CONFIRMED", "PARTIAL_RECEIVED"))
-                .le(PurchaseOrderEntity::getCreatedAt, cutoff)
-                .last("limit 50"))
+        return purchaseOrderMapper.selectOverdueForPatrol(RequestContext.tenantId(), cutoff, 50)
                 .stream()
                 .mapToInt(row -> notifyUsers("ORDER_OVERDUE_PATROL", "PURCHASE_ORDER", row.getPurchaseNo(), "采购单超时提醒", "采购单 " + row.getPurchaseNo() + " 待处理已超时。", "WARNING", "/erp/purchases"))
                 .sum();
     }
 
     private int notifySales(LocalDateTime cutoff) {
-        return salesOrderMapper.selectList(new LambdaQueryWrapper<SalesOrderEntity>()
-                .eq(SalesOrderEntity::getTenantId, RequestContext.tenantId())
-                .in(SalesOrderEntity::getStatus, List.of("DRAFT", "CONFIRMED", "PARTIAL_SHIPPED"))
-                .le(SalesOrderEntity::getCreatedAt, cutoff)
-                .last("limit 50"))
+        return salesOrderMapper.selectOverdueForPatrol(RequestContext.tenantId(), cutoff, 50)
                 .stream()
                 .mapToInt(row -> notifyUsers("ORDER_OVERDUE_PATROL", "SALES_ORDER", row.getSalesNo(), "销售单超时提醒", "销售单 " + row.getSalesNo() + " 待处理已超时。", "WARNING", "/erp/sales"))
                 .sum();

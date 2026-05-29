@@ -1,6 +1,5 @@
 package com.novadepot.backend.modules.ai;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.novadepot.backend.common.context.RequestContext;
 import com.novadepot.backend.model.entity.AIPromptTemplateEntity;
 import com.novadepot.backend.repository.AIPromptTemplateMapper;
@@ -16,12 +15,7 @@ public class AiPromptService {
     }
 
     public String renderPrompt(String scene, String userMessage) {
-        AIPromptTemplateEntity template = promptTemplateMapper.selectOne(new LambdaQueryWrapper<AIPromptTemplateEntity>()
-                .eq(AIPromptTemplateEntity::getTenantId, RequestContext.tenantId())
-                .eq(AIPromptTemplateEntity::getScene, scene)
-                .eq(AIPromptTemplateEntity::getEnabled, 1)
-                .orderByDesc(AIPromptTemplateEntity::getVersionNo)
-                .last("limit 1"));
+        AIPromptTemplateEntity template = promptTemplateMapper.selectLatestEnabled(RequestContext.tenantId(), scene);
 
         String content;
         if (template != null && StringUtils.hasText(template.getTemplateContent())) {

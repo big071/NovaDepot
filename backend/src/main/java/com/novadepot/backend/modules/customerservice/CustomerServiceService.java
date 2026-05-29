@@ -179,14 +179,7 @@ public class CustomerServiceService {
         if (sessionId != null) countQw.eq(CustomerServiceTicketEntity::getSessionId, sessionId);
         long total = ticketMapper.selectCount(countQw);
 
-        LambdaQueryWrapper<CustomerServiceTicketEntity> listQw = new LambdaQueryWrapper<CustomerServiceTicketEntity>()
-                .eq(CustomerServiceTicketEntity::getTenantId, RequestContext.tenantId())
-                .orderByDesc(CustomerServiceTicketEntity::getCreatedAt)
-                .orderByDesc(CustomerServiceTicketEntity::getId)
-                .last("limit " + offset + "," + safePageSize);
-        if (sessionId != null) listQw.eq(CustomerServiceTicketEntity::getSessionId, sessionId);
-
-        List<CustomerServiceTicketEntity> rows = ticketMapper.selectList(listQw);
+        List<CustomerServiceTicketEntity> rows = ticketMapper.selectTicketsPage(RequestContext.tenantId(), sessionId, offset, safePageSize);
         List<Map<String, Object>> list = new ArrayList<>();
         for (CustomerServiceTicketEntity ticket : rows) {
             CustomerServiceSessionEntity session = mustGetSession(ticket.getSessionId());
@@ -457,13 +450,7 @@ public class CustomerServiceService {
     }
 
     private String latestCustomerText(Long sessionId) {
-        CustomerServiceMessageEntity latest = messageMapper.selectOne(new LambdaQueryWrapper<CustomerServiceMessageEntity>()
-                .eq(CustomerServiceMessageEntity::getTenantId, RequestContext.tenantId())
-                .eq(CustomerServiceMessageEntity::getSessionId, sessionId)
-                .eq(CustomerServiceMessageEntity::getSenderType, "CUSTOMER")
-                .orderByDesc(CustomerServiceMessageEntity::getCreatedAt)
-                .orderByDesc(CustomerServiceMessageEntity::getId)
-                .last("limit 1"));
+        CustomerServiceMessageEntity latest = messageMapper.selectLatestCustomerMessage(RequestContext.tenantId(), sessionId);
         return latest == null ? "客户咨询处理中" : latest.getContent();
     }
 

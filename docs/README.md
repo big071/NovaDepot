@@ -10,6 +10,7 @@
 | 106 | [v1.3 Sprint Q4 CSV Import and Pagination Performance](106-v1.3-csv-import-pagination-performance-plan.md) | v1.3 Q4 CSV import preload, pagination risk, and limit replacement plan |
 | 107 | [v1.3 Sprint Q5 Security Hardening](107-v1.3-security-hardening-plan.md) | v1.3 Q5 JWT, secrets, login rate limit, request size, CORS, and error masking plan |
 | 108 | [v1.3 Sprint Q6 Frontend Component and Type Safety Cleanup](108-v1.3-frontend-component-type-safety-plan.md) | v1.3 Q6 AI page component split, TypeScript cleanup, and Vitest foundation |
+| 109 | [v1.3 Backend Residual Cleanup Plan](109-v1.3-backend-residual-cleanup-plan.md) | v1.3 Q7-Q9 backend residual query, reports, Agent, and notification cleanup plan |
 
 ## v1.2 DeepSeek Intelligence
 

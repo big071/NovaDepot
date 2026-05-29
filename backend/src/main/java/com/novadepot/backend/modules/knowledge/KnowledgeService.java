@@ -231,10 +231,7 @@ public class KnowledgeService {
     @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> updateRule(String configKey, Map<String, Object> body) {
         requireAdmin("只有管理员可以维护规则配置");
-        RuleConfigEntity row = ruleConfigMapper.selectOne(new LambdaQueryWrapper<RuleConfigEntity>()
-                .eq(RuleConfigEntity::getTenantId, RequestContext.tenantId())
-                .eq(RuleConfigEntity::getConfigKey, configKey)
-                .last("limit 1"));
+        RuleConfigEntity row = ruleConfigMapper.selectByConfigKey(RequestContext.tenantId(), configKey);
         if (row == null) {
             row = new RuleConfigEntity();
             row.setTenantId(RequestContext.tenantId());
@@ -350,39 +347,15 @@ public class KnowledgeService {
     }
 
     private List<FAQKnowledgeEntity> activeFaqs(String scene) {
-        LambdaQueryWrapper<FAQKnowledgeEntity> qw = new LambdaQueryWrapper<FAQKnowledgeEntity>()
-                .eq(FAQKnowledgeEntity::getTenantId, RequestContext.tenantId())
-                .eq(FAQKnowledgeEntity::getEnabled, 1)
-                .eq(FAQKnowledgeEntity::getReviewStatus, APPROVED)
-                .orderByDesc(FAQKnowledgeEntity::getPriority)
-                .orderByDesc(FAQKnowledgeEntity::getId)
-                .last("limit 20");
-        if (StringUtils.hasText(scene)) {
-            qw.and(w -> w.eq(FAQKnowledgeEntity::getScene, scene).or().like(FAQKnowledgeEntity::getTags, scene));
-        }
-        return faqMapper.selectList(qw);
+        return faqMapper.selectActiveForMatch(RequestContext.tenantId(), StringUtils.hasText(scene) ? scene : null, 20);
     }
 
     private List<SopKnowledgeEntity> activeSops(String scene) {
-        LambdaQueryWrapper<SopKnowledgeEntity> qw = new LambdaQueryWrapper<SopKnowledgeEntity>()
-                .eq(SopKnowledgeEntity::getTenantId, RequestContext.tenantId())
-                .eq(SopKnowledgeEntity::getEnabled, 1)
-                .eq(SopKnowledgeEntity::getReviewStatus, APPROVED)
-                .orderByDesc(SopKnowledgeEntity::getPriority)
-                .orderByDesc(SopKnowledgeEntity::getId)
-                .last("limit 20");
-        if (StringUtils.hasText(scene)) {
-            qw.and(w -> w.eq(SopKnowledgeEntity::getScene, scene).or().like(SopKnowledgeEntity::getTags, scene));
-        }
-        return sopMapper.selectList(qw);
+        return sopMapper.selectActiveForMatch(RequestContext.tenantId(), StringUtils.hasText(scene) ? scene : null, 20);
     }
 
     private RuleConfigEntity activeRule(String key) {
-        return ruleConfigMapper.selectOne(new LambdaQueryWrapper<RuleConfigEntity>()
-                .eq(RuleConfigEntity::getTenantId, RequestContext.tenantId())
-                .eq(RuleConfigEntity::getConfigKey, key)
-                .eq(RuleConfigEntity::getEnabled, 1)
-                .last("limit 1"));
+        return ruleConfigMapper.selectActiveByConfigKey(RequestContext.tenantId(), key);
     }
 
     private FAQKnowledgeEntity mustFaq(Long id) {

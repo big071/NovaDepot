@@ -1,6 +1,5 @@
 package com.novadepot.backend.modules.backup;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.novadepot.backend.common.context.RequestContext;
 import com.novadepot.backend.model.entity.BackupRecordEntity;
 import com.novadepot.backend.modules.auditlogs.AuditLogRecordService;
@@ -32,10 +31,7 @@ public class BackupService {
     }
 
     public List<BackupRecordEntity> list() {
-        return backupRecordMapper.selectList(new LambdaQueryWrapper<BackupRecordEntity>()
-                .eq(BackupRecordEntity::getTenantId, RequestContext.tenantId())
-                .orderByDesc(BackupRecordEntity::getStartedAt)
-                .last("limit 50"));
+        return backupRecordMapper.selectRecent(RequestContext.tenantId(), 50);
     }
 
     public Map<String, Object> runManualBackup() {

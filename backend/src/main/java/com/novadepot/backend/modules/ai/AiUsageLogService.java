@@ -1,6 +1,5 @@
 package com.novadepot.backend.modules.ai;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.novadepot.backend.common.context.RequestContext;
 import com.novadepot.backend.model.entity.AiUsageLogEntity;
 import com.novadepot.backend.repository.AiUsageLogMapper;
@@ -94,11 +93,7 @@ public class AiUsageLogService {
     }
 
     public List<Map<String, Object>> usageLogs(Long conversationId, int limit) {
-        List<AiUsageLogEntity> list = usageLogMapper.selectList(new LambdaQueryWrapper<AiUsageLogEntity>()
-                .eq(conversationId != null, AiUsageLogEntity::getConversationId, conversationId)
-                .eq(AiUsageLogEntity::getTenantId, RequestContext.tenantId())
-                .orderByDesc(AiUsageLogEntity::getId)
-                .last("limit " + Math.min(limit, 200)));
+        List<AiUsageLogEntity> list = usageLogMapper.selectRecentUsage(RequestContext.tenantId(), conversationId, Math.min(limit, 200));
         return list.stream().map(log -> {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", log.getId());

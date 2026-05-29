@@ -34,10 +34,7 @@ public class AiConversationService {
     }
 
     public List<Map<String, Object>> conversations() {
-        List<AIConversationEntity> list = conversationMapper.selectList(new LambdaQueryWrapper<AIConversationEntity>()
-                .eq(AIConversationEntity::getTenantId, RequestContext.tenantId())
-                .orderByDesc(AIConversationEntity::getStartedAt)
-                .last("limit 50"));
+        List<AIConversationEntity> list = conversationMapper.selectRecentConversations(RequestContext.tenantId(), 50);
 
         return list.stream().map(c -> Map.<String, Object>of(
                 "id", c.getId(),
@@ -99,10 +96,7 @@ public class AiConversationService {
             }
         }
         if (StringUtils.hasText(conversationNo)) {
-            AIConversationEntity existed = conversationMapper.selectOne(new LambdaQueryWrapper<AIConversationEntity>()
-                    .eq(AIConversationEntity::getTenantId, RequestContext.tenantId())
-                    .eq(AIConversationEntity::getConversationNo, conversationNo.trim())
-                    .last("limit 1"));
+            AIConversationEntity existed = conversationMapper.selectByConversationNo(RequestContext.tenantId(), conversationNo.trim());
             if (existed != null) {
                 return existed;
             }
@@ -156,10 +150,7 @@ public class AiConversationService {
     @Scheduled(cron = "0 0/30 * * * ?")
     public void archiveInactiveConversations() {
         LocalDateTime cutoff = LocalDateTime.now().minusHours(24);
-        List<AIConversationEntity> rows = conversationMapper.selectList(new LambdaQueryWrapper<AIConversationEntity>()
-                .eq(AIConversationEntity::getStatus, "ACTIVE")
-                .lt(AIConversationEntity::getLastActiveAt, cutoff)
-                .last("limit 200"));
+        List<AIConversationEntity> rows = conversationMapper.selectInactiveActive(cutoff, 200);
         for (AIConversationEntity row : rows) {
             row.setStatus("ARCHIVED");
             row.setEndedAt(LocalDateTime.now());

@@ -252,11 +252,7 @@ public class RuleAiProvider implements AiProvider {
 
     private Map<String, Object> abnormalInventoryHint(String scene) {
         LocalDateTime since = LocalDateTime.now().minusDays(3);
-        List<InventoryTransactionEntity> txns = inventoryTransactionMapper.selectList(new LambdaQueryWrapper<InventoryTransactionEntity>()
-                .eq(InventoryTransactionEntity::getTenantId, RequestContext.tenantId())
-                .ge(InventoryTransactionEntity::getOccurredAt, since)
-                .orderByDesc(InventoryTransactionEntity::getOccurredAt)
-                .last("limit 200"));
+        List<InventoryTransactionEntity> txns = inventoryTransactionMapper.selectRecentSince(RequestContext.tenantId(), since, 200);
 
         List<InventoryTransactionEntity> abnormal = txns.stream()
                 .filter(t -> t.getChangeQty() != null && t.getChangeQty().abs().compareTo(abnormalChangeThreshold) >= 0)
@@ -379,9 +375,7 @@ public class RuleAiProvider implements AiProvider {
     }
 
     private List<InventoryEntity> inventoryRows() {
-        return inventoryMapper.selectList(new LambdaQueryWrapper<InventoryEntity>()
-                .eq(InventoryEntity::getTenantId, RequestContext.tenantId())
-                .last("limit 500"));
+        return inventoryMapper.selectFirstRows(RequestContext.tenantId(), 500);
     }
 
     private boolean hasAny(String text, String... keywords) {

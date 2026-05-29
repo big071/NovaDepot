@@ -43,10 +43,7 @@ public class AiMessageService {
     }
 
     public List<Map<String, Object>> conversationMessagesByNo(String conversationNo) {
-        AIConversationEntity conversation = conversationMapper.selectOne(new LambdaQueryWrapper<AIConversationEntity>()
-                .eq(AIConversationEntity::getTenantId, RequestContext.tenantId())
-                .eq(AIConversationEntity::getConversationNo, conversationNo)
-                .last("limit 1"));
+        AIConversationEntity conversation = conversationMapper.selectByConversationNo(RequestContext.tenantId(), conversationNo);
         if (conversation == null || conversation.getId() == null) {
             return List.of();
         }
@@ -95,13 +92,7 @@ public class AiMessageService {
     }
 
     public List<Map<String, String>> recentContextMessages(Long conversationId) {
-        List<AIMessageEntity> rows = messageMapper.selectList(new LambdaQueryWrapper<AIMessageEntity>()
-                .eq(AIMessageEntity::getTenantId, RequestContext.tenantId())
-                .eq(AIMessageEntity::getConversationId, conversationId)
-                .in(AIMessageEntity::getRole, List.of("USER", "ASSISTANT"))
-                .in(AIMessageEntity::getStatus, List.of("COMPLETED", "STOPPED"))
-                .orderByDesc(AIMessageEntity::getId)
-                .last("limit 40"));
+        List<AIMessageEntity> rows = messageMapper.selectRecentContext(RequestContext.tenantId(), conversationId, 40);
         java.util.Collections.reverse(rows);
         return rows.stream()
                 .map(message -> Map.of(
