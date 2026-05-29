@@ -49,66 +49,87 @@ public class RuleAiProvider implements AiProvider {
     }
 
     @Override
-    public Map<String, Object> chat(String scene, String message, Map<String, Object> context) {
+    public AiProviderResponse chat(String scene, String message, Map<String, Object> context) {
         String normalized = message == null ? "" : message.toLowerCase(Locale.ROOT);
 
         if (hasAny(normalized, "\u4f4e\u5e93\u5b58", "\u5e93\u5b58\u4e0d\u8db3", "\u5e93\u5b58\u9884\u8b66")) {
-            return lowStockAnalysis(scene);
+            return response(lowStockAnalysis(scene));
         }
         if (hasAny(normalized, "\u5e93\u5b58") && hasAny(normalized, "\u591a\u5c11", "\u67e5\u8be2", "\u603b\u91cf", "\u6982\u89c8", "\u60c5\u51b5", "\u600e\u4e48\u6837")) {
-            return inventoryOverview(scene);
+            return response(inventoryOverview(scene));
         }
         if (hasAny(normalized, "\u8865\u8d27", "\u91c7\u8d2d\u5efa\u8bae", "\u8865\u4ed3")) {
-            return replenishSuggestion(scene);
+            return response(replenishSuggestion(scene));
         }
 
         if (hasAny(normalized, "低库存", "库存不足", "库存预警")) {
-            return lowStockAnalysis(scene);
+            return response(lowStockAnalysis(scene));
         }
         if (hasAny(normalized, "库存") && hasAny(normalized, "多少", "查询", "总量", "概览", "情况", "怎么样")) {
-            return inventoryOverview(scene);
+            return response(inventoryOverview(scene));
         }
         if (hasAny(normalized, "补货", "采购建议", "补仓")) {
-            return replenishSuggestion(scene);
+            return response(replenishSuggestion(scene));
         }
         if (hasAny(normalized, "异常", "波动", "突增", "突减")) {
-            return abnormalInventoryHint(scene);
+            return response(abnormalInventoryHint(scene));
         }
         if (hasAny(normalized, "今天", "日报", "今日总结")) {
-            return periodicReport(scene, 1, "日报");
+            return response(periodicReport(scene, 1, "日报"));
         }
 
         if (hasAny(normalized, "库存", "stock") && hasAny(normalized, "多少", "查询", "总量", "概览", "summary")) {
-            return inventoryOverview(scene);
+            return response(inventoryOverview(scene));
         }
         if (hasAny(normalized, "低库存", "预警", "不足")) {
-            return lowStockAnalysis(scene);
+            return response(lowStockAnalysis(scene));
         }
         if (hasAny(normalized, "补货", "采购建议", "补仓")) {
-            return replenishSuggestion(scene);
+            return response(replenishSuggestion(scene));
         }
         if (hasAny(normalized, "异常", "波动", "突增", "突减")) {
-            return abnormalInventoryHint(scene);
+            return response(abnormalInventoryHint(scene));
         }
         if (hasAny(normalized, "日报", "日报表", "今日总结")) {
-            return periodicReport(scene, 1, "日报");
+            return response(periodicReport(scene, 1, "日报"));
         }
         if (hasAny(normalized, "周报", "每周", "7天")) {
-            return periodicReport(scene, 7, "周报");
+            return response(periodicReport(scene, 7, "周报"));
         }
         if (hasAny(normalized, "sop", "流程", "作业", "操作规范", "标准流程")) {
-            return sopAnswer(scene, normalized);
+            return response(sopAnswer(scene, normalized));
         }
         if (hasAny(normalized, "经营", "利润", "策略", "企业建议", "业务建议")) {
-            return enterpriseAdvice(scene);
+            return response(enterpriseAdvice(scene));
         }
 
-        return Map.of(
+        return response(Map.of(
                 "reply", "已识别为通用咨询。当前可提问：库存概览、低库存分析、补货建议、异常波动、日报周报、SOP。",
                 "scene", scene,
                 "provider", providerName(),
                 "confidence", 0.72
-        );
+        ));
+    }
+
+    @SuppressWarnings("unchecked")
+    private AiProviderResponse response(Map<String, Object> map) {
+        AiProviderResponse.Builder builder = AiProviderResponse.builder(
+                        String.valueOf(map.getOrDefault("scene", "")),
+                        String.valueOf(map.getOrDefault("provider", providerName())))
+                .reply(String.valueOf(map.getOrDefault("reply", "")));
+        Object confidence = map.get("confidence");
+        if (confidence instanceof Number number) {
+            builder.confidence(number);
+        }
+        Object metrics = map.get("metrics");
+        if (metrics instanceof Map<?, ?> rawMetrics) {
+            builder.metrics((Map<String, Object>) rawMetrics);
+        }
+        Object suggestions = map.get("suggestions");
+        if (suggestions instanceof List<?> rawSuggestions) {
+            builder.suggestions((List<Map<String, Object>>) rawSuggestions);
+        }
+        return builder.build();
     }
 
     private Map<String, Object> inventoryOverview(String scene) {
@@ -231,11 +252,7 @@ public class RuleAiProvider implements AiProvider {
 
     private Map<String, Object> abnormalInventoryHint(String scene) {
         LocalDateTime since = LocalDateTime.now().minusDays(3);
-        List<InventoryTransactionEntity> txns = inventoryTransactionMapper.selectList(new LambdaQueryWrapper<InventoryTransactionEntity>()
-                .eq(InventoryTransactionEntity::getTenantId, RequestContext.tenantId())
-                .ge(InventoryTransactionEntity::getOccurredAt, since)
-                .orderByDesc(InventoryTransactionEntity::getOccurredAt)
-                .last("limit 200"));
+        List<InventoryTransactionEntity> txns = inventoryTransactionMapper.selectRecentSince(RequestContext.tenantId(), since, 200);
 
         List<InventoryTransactionEntity> abnormal = txns.stream()
                 .filter(t -> t.getChangeQty() != null && t.getChangeQty().abs().compareTo(abnormalChangeThreshold) >= 0)
@@ -358,9 +375,7 @@ public class RuleAiProvider implements AiProvider {
     }
 
     private List<InventoryEntity> inventoryRows() {
-        return inventoryMapper.selectList(new LambdaQueryWrapper<InventoryEntity>()
-                .eq(InventoryEntity::getTenantId, RequestContext.tenantId())
-                .last("limit 500"));
+        return inventoryMapper.selectFirstRows(RequestContext.tenantId(), 500);
     }
 
     private boolean hasAny(String text, String... keywords) {

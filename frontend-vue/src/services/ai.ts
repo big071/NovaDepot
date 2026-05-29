@@ -97,16 +97,41 @@ export interface AiMessage {
   createdAt?: string;
 }
 
+export interface AiStreamMeta {
+  conversationNo?: string;
+  conversationId?: string | number;
+  provider?: string;
+  model?: string;
+  requestId?: string;
+}
+
+export interface AiStreamStatus {
+  status?: "PENDING" | "STREAMING" | "COMPLETED" | "FAILED" | "STOPPED" | string;
+  message?: string;
+  provider?: string;
+  model?: string;
+}
+
+export interface AiStreamDone {
+  status?: "COMPLETED" | "FAILED" | "STOPPED" | string;
+  toolCalls?: AiToolCallView[];
+  validationWarnings?: string[];
+  toolLimitReached?: boolean;
+  fallbackFrom?: string;
+  provider?: string;
+  model?: string;
+}
+
 export type AiStreamEvent =
-  | { event: "meta"; data: Record<string, unknown> }
+  | { event: "meta"; data: AiStreamMeta }
   | { event: "token"; data: { content?: string } }
-  | { event: "status"; data: Record<string, unknown> }
+  | { event: "status"; data: AiStreamStatus }
   | { event: "tool_start"; data: Partial<AiToolCallView> }
   | { event: "tool_result"; data: AiToolCallView }
   | { event: "tool_error"; data: Partial<AiToolCallView> & { message?: string } }
   | { event: "tool_limit"; data: { message?: string } }
   | { event: "validation_warning"; data: { message?: string } }
-  | { event: "done"; data: Record<string, unknown> }
+  | { event: "done"; data: AiStreamDone }
   | { event: "error"; data: { message?: string; errorCode?: string; provider?: string; model?: string; statusCode?: number; requestId?: string } };
 
 function parseSseBlock(block: string): AiStreamEvent | null {

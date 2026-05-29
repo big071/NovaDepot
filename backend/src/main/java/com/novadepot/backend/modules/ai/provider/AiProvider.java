@@ -9,5 +9,5 @@ public interface AiProvider {
         return true;
     }
 
-    Map<String, Object> chat(String scene, String message, Map<String, Object> context);
+    AiProviderResponse chat(String scene, String message, Map<String, Object> context);
 }

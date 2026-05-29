@@ -1,5 +1,21 @@
 # NovaDepot 文档索引
 
+## v1.3 Code Quality & Stability
+
+| 编号 | 文档 | 说明 |
+|---|---|---|
+| 103 | [v1.3 Sprint Q1 Test Baseline and Code Quality Scan](103-v1.3-sprint-q1-test-baseline-and-quality-scan.md) | v1.3 Q1 质量基线、测试地基、扫描结果和 Q2 AiService 拆分建议 |
+| 104 | [v1.3 Sprint Q2 AiService Decomposition Plan](104-v1.3-ai-service-decomposition-plan.md) | v1.3 Q2 AiService 拆分执行计划、测试保护和验收标准 |
+| 105 | [v1.3 Sprint Q3 AiProvider Type Safety Plan](105-v1.3-ai-provider-type-safety-plan.md) | v1.3 Q3 AiProvider Type Safety DTO migration plan |
+| 106 | [v1.3 Sprint Q4 CSV Import and Pagination Performance](106-v1.3-csv-import-pagination-performance-plan.md) | v1.3 Q4 CSV import preload, pagination risk, and limit replacement plan |
+| 107 | [v1.3 Sprint Q5 Security Hardening](107-v1.3-security-hardening-plan.md) | v1.3 Q5 JWT, secrets, login rate limit, request size, CORS, and error masking plan |
+| 108 | [v1.3 Sprint Q6 Frontend Component and Type Safety Cleanup](108-v1.3-frontend-component-type-safety-plan.md) | v1.3 Q6 AI page component split, TypeScript cleanup, and Vitest foundation |
+| 109 | [v1.3 Backend Residual Cleanup Plan](109-v1.3-backend-residual-cleanup-plan.md) | v1.3 Q7-Q9 backend residual query, reports, Agent, and notification cleanup plan |
+| 110 | [v1.3 Final Quality Cleanup Plan](110-v1.3-final-quality-cleanup-plan.md) | v1.3 Q10-Q12 CustomerService/Knowledge, non-AI frontend, and Docker/CI/static analysis cleanup plan |
+| 111 | [v1.3 Release Notes](111-v1.3-release-notes.md) | v1.3 code quality and stability release notes, compatibility notes, and backlog |
+| 112 | [v1.3 Delivery Notes](112-v1.3-delivery-notes.md) | v1.3 delivered scope, startup, configuration, validation, and release follow-up |
+| 113 | [v1.3 Acceptance Checklist](113-v1.3-acceptance-checklist.md) | v1.3 final roadmap, behavior preservation, quality gate, and release checklist |
+
 ## v1.2 DeepSeek Intelligence
 
 | 编号 | 文档 | 说明 |

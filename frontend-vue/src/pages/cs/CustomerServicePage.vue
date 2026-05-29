@@ -15,22 +15,12 @@
     <n-alert v-else-if="successText" type="success" :show-icon="false">{{ successText }}</n-alert>
 
     <div class="grid gap-4 xl:grid-cols-[320px,1fr]">
-      <article class="nd-table-shell">
-        <div class="nd-table-head"><h3 class="nd-section-title">会话列表</h3></div>
-        <div class="nd-table-body space-y-2">
-          <n-empty v-if="!loadingSessions && sessions.length === 0" class="nd-empty-shell" description="暂无会话" />
-          <button v-for="item in sessions" :key="item.id" class="w-full rounded-xl border p-3 text-left transition"
-            :class="activeSessionId === item.id ? 'border-primary bg-primary/10' : 'border-border bg-bg/50 hover:border-primary/40'"
-            @click="selectSession(item.id)">
-            <div class="flex items-center justify-between">
-              <p class="text-sm font-medium">{{ item.sessionNo }}</p>
-              <n-tag :bordered="false" size="small" :type="item.priority === 'HIGH' ? 'error' : 'warning'">{{ item.priority }}</n-tag>
-            </div>
-            <p class="mt-1 text-xs text-text-secondary">状态：{{ item.status }}</p>
-            <p class="mt-1 text-xs text-text-secondary">处理模式：{{ item.handoffStatus === 'HUMAN_ASSIGNED' ? '人工接管中' : 'AI优先' }}</p>
-          </button>
-        </div>
-      </article>
+      <CustomerSessionList
+        :sessions="sessions"
+        :active-session-id="activeSessionId"
+        :loading="loadingSessions"
+        @select-session="selectSession"
+      />
 
       <article class="space-y-4">
         <div class="grid gap-3 md:grid-cols-4">
@@ -52,81 +42,46 @@
           </article>
         </div>
 
-        <article class="nd-table-shell">
-          <div class="nd-table-head">
-            <h3 class="nd-section-title">消息与AI建议</h3>
-          </div>
-          <div class="nd-table-body space-y-3">
-            <div class="flex flex-wrap gap-2">
-              <n-button class="nd-soft-focus" :disabled="!activeSessionId" :loading="loadingSuggestion" @click="loadSuggestion">获取AI建议</n-button>
-              <n-button class="nd-soft-focus" :disabled="!activeSessionId || !suggestionFirst" @click="inputText = suggestionFirst">套用首条建议</n-button>
-              <n-button class="nd-soft-focus" :disabled="!activeSessionId" @click="transferHuman">人工接管</n-button>
-              <n-button class="nd-soft-focus" :disabled="!activeSessionId" @click="autoReplyEnabled = !autoReplyEnabled">
-                自动回复：{{ autoReplyEnabled ? "开启" : "关闭" }}
-              </n-button>
-            </div>
-            <article class="rounded-xl border border-border bg-bg/60 p-3 text-sm">
-              <p class="font-medium">AI建议依据</p>
-              <p class="mt-1 text-text-secondary">{{ (aiSuggestion?.basis || []).join("；") || "-" }}</p>
-              <p class="mt-2 font-medium">工单分类建议：{{ aiSuggestion?.ticketCategorySuggestion || "-" }}</p>
-              <p class="mt-1">优先级建议：{{ aiSuggestion?.prioritySuggestion || "-" }}</p>
-              <p class="mt-1">SOP建议：{{ aiSuggestion?.sopSuggestion || "-" }}</p>
-              <p class="mt-2 font-medium">知识引用来源</p>
-              <div v-if="(aiSuggestion?.knowledgeRefs || []).length" class="mt-2 flex flex-wrap gap-2">
-                <n-tag v-for="ref in aiSuggestion?.knowledgeRefs || []" :key="`${ref.type}-${ref.code || ref.title}`" :bordered="false" type="info">
-                  {{ ref.type }}：{{ ref.title }} / {{ ref.scene || '通用' }}
-                </n-tag>
-              </div>
-              <p v-else class="mt-1 text-text-secondary">{{ aiSuggestion?.knowledgeFallbackNotice || "未命中知识库，当前建议来自规则回退。" }}</p>
-              <p class="mt-2 text-xs text-text-secondary" v-if="aiSuggestion?.ruleConfigBasis">
-                规则配置：自动回复 {{ aiSuggestion.ruleConfigBasis.autoReplyPriority }}；候选回复 {{ aiSuggestion.ruleConfigBasis.candidateReplyPriority }}
-              </p>
-            </article>
-            <div class="max-h-[260px] space-y-2 overflow-y-auto rounded-xl border border-border bg-bg/40 p-3">
-              <article v-for="msg in messages" :key="msg.id" class="rounded-lg border border-border bg-surface p-2 text-sm">
-                <p class="text-xs text-text-secondary">{{ msg.sender }} · {{ msg.msgType }}</p>
-                <p class="mt-1">{{ msg.content }}</p>
-              </article>
-            </div>
-            <div class="flex gap-2">
-              <n-input v-model:value="inputText" placeholder="输入消息内容，回车发送" @keyup.enter="sendAgentMessage" />
-              <n-button :loading="sending" :disabled="!activeSessionId || !inputText.trim()" @click="sendAgentMessage">人工发送</n-button>
-              <n-button type="primary" :loading="sending" :disabled="!activeSessionId || !inputText.trim()" @click="sendCustomerMessage">模拟客户提问</n-button>
-            </div>
-          </div>
-        </article>
+        <CustomerSuggestionPanel
+          :active-session-id="activeSessionId"
+          :loading-suggestion="loadingSuggestion"
+          :suggestion-first="suggestionFirst"
+          :auto-reply-enabled="autoReplyEnabled"
+          :ai-suggestion="aiSuggestion"
+          :messages="messages"
+          :input-text="inputText"
+          :sending="sending"
+          @load-suggestion="loadSuggestion"
+          @use-suggestion="inputText = suggestionFirst"
+          @transfer-human="transferHuman"
+          @toggle-auto-reply="autoReplyEnabled = !autoReplyEnabled"
+          @update-input="inputText = $event"
+          @send-agent-message="sendAgentMessage"
+          @send-customer-message="sendCustomerMessage"
+        />
 
-        <article class="nd-table-shell">
-          <div class="nd-table-head">
-            <h3 class="nd-section-title">工单列表</h3>
-            <n-button class="nd-soft-focus" :disabled="!activeSessionId" @click="openCreateTicket">创建工单</n-button>
-          </div>
-          <div class="nd-table-body space-y-3">
-            <article v-for="ticket in tickets" :key="ticket.ticketId" class="rounded-xl border border-border bg-bg/60 p-3 text-sm">
-              <div class="flex items-center justify-between">
-                <p class="font-medium">{{ ticket.ticketNo }}</p>
-                <n-tag :bordered="false" type="info">{{ ticket.status }}</n-tag>
-              </div>
-              <p class="mt-1 text-text-secondary">责任人：{{ ticket.assigneeUserId || "-" }}</p>
-              <p class="mt-1 text-text-secondary">AI自动回复：{{ ticket.aiAutoReplied ? "是" : "否" }} / 人工接管：{{ ticket.humanTakenOver ? "是" : "否" }}</p>
-              <p class="mt-1 text-text-secondary">下一步建议：{{ ticket.nextSuggestion || "-" }}</p>
-              <div class="mt-2 grid gap-2 md:grid-cols-3">
-                <n-select v-model:value="ticketStatusDraft[ticket.ticketId]" :options="statusOptions" />
-                <n-input v-model:value="ticketOwnerDraft[ticket.ticketId]" placeholder="负责人ID" />
-                <n-input v-model:value="ticketRemarkDraft[ticket.ticketId]" placeholder="处理备注/关闭原因" />
-              </div>
-              <div class="mt-2 flex flex-wrap gap-2">
-                <n-button size="small" @click="updateTicketStatus(ticket)">保存状态</n-button>
-                <n-button size="small" @click="updateTicketOwner(ticket)">保存负责人</n-button>
-                <n-button size="small" @click="updateTicketRemark(ticket)">保存备注</n-button>
-                <n-button size="small" type="primary" @click="openTimeline(ticket.ticketId)">查看处理历史</n-button>
-                <n-button size="small" @click="draftFaq(ticket)">沉淀FAQ草稿</n-button>
-                <n-button size="small" @click="draftSop(ticket)">沉淀SOP草稿</n-button>
-              </div>
-            </article>
-            <n-pagination :page="ticketPageNo" :page-size="ticketPageSize" :item-count="ticketTotal" @update:page="onTicketPageChange" />
-          </div>
-        </article>
+        <CustomerTicketList
+          :active-session-id="activeSessionId"
+          :tickets="tickets"
+          :ticket-status-draft="ticketStatusDraft"
+          :ticket-owner-draft="ticketOwnerDraft"
+          :ticket-remark-draft="ticketRemarkDraft"
+          :status-options="statusOptions"
+          :ticket-page-no="ticketPageNo"
+          :ticket-page-size="ticketPageSize"
+          :ticket-total="ticketTotal"
+          @open-create-ticket="openCreateTicket"
+          @update-status-draft="(ticketId, value) => ticketStatusDraft[ticketId] = value"
+          @update-owner-draft="(ticketId, value) => ticketOwnerDraft[ticketId] = value"
+          @update-remark-draft="(ticketId, value) => ticketRemarkDraft[ticketId] = value"
+          @update-ticket-status="updateTicketStatus"
+          @update-ticket-owner="updateTicketOwner"
+          @update-ticket-remark="updateTicketRemark"
+          @open-timeline="openTimeline"
+          @draft-faq="draftFaq"
+          @draft-sop="draftSop"
+          @ticket-page-change="onTicketPageChange"
+        />
       </article>
     </div>
 
@@ -159,9 +114,12 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
-import { NAlert, NButton, NDataTable, NInput, NModal, NPagination, NSelect, NTag, useMessage } from "naive-ui";
+import { NAlert, NButton, NDataTable, NInput, NModal, NSelect, useMessage } from "naive-ui";
 import type { DataTableColumns } from "naive-ui";
-import { csApi, type CsAiSuggestion, type CsMessage, type CsSession, type CsTicket, type TicketTimelineResp } from "@/services/customerService";
+import CustomerSessionList from "@/components/cs/CustomerSessionList.vue";
+import CustomerSuggestionPanel from "@/components/cs/CustomerSuggestionPanel.vue";
+import CustomerTicketList from "@/components/cs/CustomerTicketList.vue";
+import { csApi, type CsAiSuggestion, type CsMessage, type CsSession, type CsTicket, type TicketTimelineItem, type TicketTimelineResp } from "@/services/customerService";
 import { knowledgeApi } from "@/services/knowledge";
 
 const router = useRouter();
@@ -199,11 +157,11 @@ const priorityOptions = [
 const activeSession = computed(() => sessions.value.find((v) => v.id === activeSessionId.value) || null);
 const suggestionFirst = computed(() => (aiSuggestion.value?.replyCandidates || [])[0] || "");
 
-const timelineColumns: DataTableColumns = [
+const timelineColumns: DataTableColumns<TicketTimelineItem> = [
   { title: "操作时间", key: "occurredAt", width: 180 },
   { title: "操作人", key: "operatorName", width: 120 },
   { title: "动作", key: "actionLabel", width: 150 },
-  { title: "状态变化", key: "status", width: 180, render: (row: any) => `${row.statusFrom || "-"} -> ${row.statusTo || "-"}` },
+  { title: "状态变化", key: "status", width: 180, render: (row) => `${row.statusFrom || "-"} -> ${row.statusTo || "-"}` },
   { title: "备注/意见", key: "note" }
 ];
 

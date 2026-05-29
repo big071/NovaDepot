@@ -48,12 +48,21 @@ public class AuditLogsService {
         LambdaQueryWrapper<AuditLogEntity> countQw = buildFilter(module, action, resourceType, resourceId, bizNo, operatorId, operatorKeyword, onlyFailed, dateFrom, dateTo);
         Long total = auditLogMapper.selectCount(countQw);
 
-        LambdaQueryWrapper<AuditLogEntity> listQw = buildFilter(module, action, resourceType, resourceId, bizNo, operatorId, operatorKeyword, onlyFailed, dateFrom, dateTo)
-                .orderByDesc(AuditLogEntity::getOccurredAt)
-                .orderByDesc(AuditLogEntity::getId)
-                .last("limit " + offset + "," + safePageSize);
-
-        List<AuditLogEntity> rows = auditLogMapper.selectList(listQw);
+        List<AuditLogEntity> rows = auditLogMapper.selectAuditPage(
+                RequestContext.tenantId(),
+                clean(module),
+                clean(action),
+                clean(resourceType),
+                clean(resourceId),
+                clean(bizNo),
+                operatorId,
+                clean(operatorKeyword),
+                Boolean.TRUE.equals(onlyFailed),
+                parseDateTime(dateFrom, false),
+                parseDateTime(dateTo, true),
+                offset,
+                safePageSize
+        );
         List<Map<String, Object>> list = new ArrayList<>(rows.size());
         rows.forEach(item -> list.add(toMap(item, false)));
 
@@ -86,12 +95,7 @@ public class AuditLogsService {
         long delta = 4096L;
         long lower = id > Long.MIN_VALUE + delta ? id - delta : Long.MIN_VALUE;
         long upper = id < Long.MAX_VALUE - delta ? id + delta : Long.MAX_VALUE;
-        List<AuditLogEntity> candidates = auditLogMapper.selectList(new LambdaQueryWrapper<AuditLogEntity>()
-                .eq(AuditLogEntity::getTenantId, RequestContext.tenantId())
-                .ge(AuditLogEntity::getId, lower)
-                .le(AuditLogEntity::getId, upper)
-                .orderByDesc(AuditLogEntity::getOccurredAt)
-                .last("limit 20"));
+        List<AuditLogEntity> candidates = auditLogMapper.selectNearestCandidates(RequestContext.tenantId(), lower, upper, 20);
         if (candidates == null || candidates.isEmpty()) {
             return Optional.empty();
         }
@@ -167,6 +171,10 @@ public class AuditLogsService {
         } catch (Exception ignored) {
             return null;
         }
+    }
+
+    private String clean(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     private Map<String, Object> toMap(AuditLogEntity row, boolean includeDetail) {

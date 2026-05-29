@@ -2,6 +2,8 @@ package com.novadepot.backend.modules.ai.tools;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novadepot.backend.common.config.AiProperties;
+import com.novadepot.backend.modules.ai.provider.AiProviderResponse;
+import com.novadepot.backend.modules.ai.provider.AiProviderResponseMapper;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -19,15 +21,18 @@ public class AiFunctionCallingOrchestrator {
     private final AiToolRegistry registry;
     private final AiToolExecutor executor;
     private final ObjectMapper objectMapper;
+    private final AiProviderResponseMapper providerResponseMapper;
 
     public AiFunctionCallingOrchestrator(AiProperties aiProperties,
                                          AiToolRegistry registry,
                                          AiToolExecutor executor,
-                                         ObjectMapper objectMapper) {
+                                         ObjectMapper objectMapper,
+                                         AiProviderResponseMapper providerResponseMapper) {
         this.aiProperties = aiProperties;
         this.registry = registry;
         this.executor = executor;
         this.objectMapper = objectMapper;
+        this.providerResponseMapper = providerResponseMapper;
     }
 
     public void prepareContext(Map<String, Object> context) {
@@ -41,7 +46,7 @@ public class AiFunctionCallingOrchestrator {
     @SuppressWarnings("unchecked")
     public AiFunctionCallingResult run(String userMessage,
                                        Map<String, Object> context,
-                                       Map<String, Object> providerResp,
+                                       AiProviderResponse providerResp,
                                        Long conversationId,
                                        Long messageId,
                                        String requestId) {
@@ -49,17 +54,8 @@ public class AiFunctionCallingOrchestrator {
             return AiFunctionCallingResult.empty();
         }
         List<AiToolCall> calls = new ArrayList<>();
-        Object providerCalls = providerResp == null ? null : providerResp.get("toolCalls");
-        if (providerCalls instanceof List<?> rawCalls) {
-            for (Object item : rawCalls) {
-                if (item instanceof Map<?, ?> map) {
-                    Object name = map.get("name");
-                    Object args = map.get("arguments");
-                    if (name != null) {
-                        calls.add(new AiToolCall(String.valueOf(name), args == null ? "{}" : String.valueOf(args)));
-                    }
-                }
-            }
+        if (providerResp != null) {
+            calls.addAll(providerResponseMapper.toolCallsToFunctionCalls(providerResp));
         }
         if (calls.isEmpty()) {
             calls.addAll(mockCalls(userMessage));

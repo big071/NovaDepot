@@ -7,6 +7,7 @@ import com.novadepot.backend.modules.auth.dto.ChangePasswordRequest;
 import com.novadepot.backend.modules.auth.dto.LoginRequest;
 import com.novadepot.backend.modules.auth.dto.LoginResponse;
 import com.novadepot.backend.security.permission.RequirePermission;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.slf4j.MDC;
 import org.springframework.security.core.Authentication;
@@ -25,8 +26,8 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ApiResponse<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
-        return ApiResponse.success(authService.login(request), MDC.get("traceId"));
+    public ApiResponse<LoginResponse> login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
+        return ApiResponse.success(authService.login(request, clientIp(httpRequest)), MDC.get("traceId"));
     }
 
     @PostMapping("/logout")
@@ -61,5 +62,17 @@ public class AuthController {
         Long tenantId = RequestContext.tenantId() == null ? 1L : RequestContext.tenantId();
         Long userId = RequestContext.userId() == null ? 1L : RequestContext.userId();
         return ApiResponse.success(authService.meProfile(tenantId, userId, username), MDC.get("traceId"));
+    }
+
+    private String clientIp(HttpServletRequest request) {
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded != null && !forwarded.isBlank()) {
+            return forwarded.split(",")[0].trim();
+        }
+        String realIp = request.getHeader("X-Real-IP");
+        if (realIp != null && !realIp.isBlank()) {
+            return realIp.trim();
+        }
+        return request.getRemoteAddr();
     }
 }

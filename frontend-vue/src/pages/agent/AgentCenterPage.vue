@@ -16,158 +16,47 @@
     </n-alert>
     <n-alert v-if="errorText" class="nd-state-alert" type="error" :show-icon="false">{{ errorText }}</n-alert>
 
-    <article class="nd-table-shell">
-      <div class="nd-table-head">
-        <div>
-          <h3 class="nd-section-title">任务列表</h3>
-          <p class="nd-section-subtitle">只展示与业务直接相关的任务</p>
-        </div>
-      </div>
-      <div class="nd-table-body space-y-3">
-        <div class="grid gap-3 md:grid-cols-3">
-          <button
-            v-for="task in tasks"
-            :key="task.taskCode"
-            class="rounded-xl border p-3 text-left transition"
-            :class="selectedTaskCode === task.taskCode ? 'border-primary bg-primary/10' : 'border-border bg-bg/50 hover:border-primary/50'"
-            @click="selectTask(task.taskCode)"
-          >
-            <p class="text-sm font-semibold">{{ displayTaskName(task) }}</p>
-            <p class="mt-1 text-xs text-text-secondary">{{ displayTaskDescription(task) }}</p>
-            <p class="mt-2 text-[11px] text-text-secondary">任务编码：{{ task.taskCode }}</p>
-          </button>
-        </div>
+    <AgentTaskList
+      :tasks="tasks"
+      :selected-task-code="selectedTaskCode"
+      :selected-task="selectedTask"
+      :selected-task-params="selectedTaskParams"
+      :task-form="taskForm"
+      :executing="executing"
+      :can-execute="canExecute"
+      :display-task-name="displayTaskName"
+      :display-task-description="displayTaskDescription"
+      :display-task-intro="displayTaskIntro"
+      :to-number="toNumber"
+      :to-text="toText"
+      @select-task="selectTask"
+      @update-task-form="updateTaskFormValue"
+      @execute="onExecute"
+    />
 
-        <article v-if="selectedTask" class="rounded-xl border border-border bg-bg/50 p-3 text-xs text-text-secondary">
-          <p class="font-medium text-text-primary">执行前说明</p>
-          <p class="mt-1">这个任务会做什么：{{ displayTaskIntro(selectedTask) }}</p>
-          <p class="mt-1">会读取哪些数据：{{ (selectedTask.readData ?? []).join("、") || "系统默认业务数据" }}</p>
-          <p class="mt-1">输出什么结果：{{ selectedTask.output || "结构化任务结果、风险与建议" }}</p>
-        </article>
+    <AgentRunResultPanel
+      :current-run="currentRun"
+      :current-steps="currentSteps"
+      :step-columns="stepColumns"
+      :result-summary-cards="resultSummaryCards"
+      :basis-list="basisList"
+      :action-list="actionList"
+      :result-columns="resultColumns"
+      :result-rows="resultRows"
+      :pretty-json="prettyJson"
+    />
 
-        <div v-if="selectedTaskParams.length > 0" class="space-y-3 rounded-xl border border-border bg-bg/40 p-3">
-          <p class="text-sm font-medium">任务参数（按业务含义填写）</p>
-          <div class="grid gap-3 md:grid-cols-2">
-            <article v-for="param in selectedTaskParams" :key="param.key" class="rounded-lg border border-border bg-surface p-3">
-              <p class="text-sm font-medium">{{ param.label }}</p>
-              <p class="mt-1 text-xs text-text-secondary">{{ param.description }}</p>
-              <n-input-number
-                v-if="param.type === 'number'"
-                class="mt-2 w-full"
-                :value="toNumber(taskForm[param.key])"
-                :min="0"
-                :show-button="false"
-                :placeholder="param.placeholder || '请输入数值'"
-                @update:value="(value) => updateTaskFormValue(param.key, value)"
-              />
-              <n-input
-                v-else
-                class="mt-2"
-                :value="toText(taskForm[param.key])"
-                :placeholder="param.placeholder || (param.type === 'date' ? 'YYYY-MM-DD' : '请输入内容')"
-                @update:value="(value) => updateTaskFormValue(param.key, value)"
-              />
-            </article>
-          </div>
-        </div>
-
-        <n-empty v-else-if="selectedTaskCode" class="nd-empty-shell" description="当前任务无需额外参数，可直接执行。" />
-        <n-empty v-else class="nd-empty-shell" description="请先选择任务，参数区会按任务自动变化。" />
-
-        <div class="flex justify-end">
-          <n-button class="nd-soft-focus" type="primary" :loading="executing" :disabled="!selectedTaskCode || !canExecute" @click="onExecute">
-            {{ canExecute ? "执行任务" : "当前账号仅可查看历史" }}
-          </n-button>
-        </div>
-      </div>
-    </article>
-
-    <article class="nd-table-shell">
-      <div class="nd-table-head">
-        <div>
-          <h3 class="nd-section-title">执行过程</h3>
-          <p class="nd-section-subtitle">步骤数：{{ currentSteps.length }}</p>
-        </div>
-      </div>
-      <div class="nd-table-body">
-        <n-data-table :columns="stepColumns" :data="currentSteps" :bordered="false" :max-height="320" />
-      </div>
-    </article>
-
-    <article class="nd-table-shell">
-      <div class="nd-table-head">
-        <div>
-          <h3 class="nd-section-title">执行结果</h3>
-          <p class="nd-section-subtitle">状态：{{ currentRun?.status || '-' }}</p>
-        </div>
-      </div>
-      <div class="nd-table-body space-y-3">
-        <n-descriptions bordered :column="2" label-placement="left" size="small">
-          <n-descriptions-item label="任务">{{ currentRun?.taskName || '-' }}</n-descriptions-item>
-          <n-descriptions-item label="Run ID">{{ currentRun?.id || '-' }}</n-descriptions-item>
-          <n-descriptions-item label="开始时间">{{ currentRun?.startedAt || '-' }}</n-descriptions-item>
-          <n-descriptions-item label="结束时间">{{ currentRun?.finishedAt || '-' }}</n-descriptions-item>
-        </n-descriptions>
-
-        <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <article class="rounded-xl border border-border bg-bg/50 p-3" v-for="card in resultSummaryCards" :key="card.title">
-            <p class="text-xs text-text-secondary">{{ card.title }}</p>
-            <p class="mt-1 text-sm font-semibold">{{ card.value }}</p>
-          </article>
-        </div>
-
-        <div class="grid gap-3 lg:grid-cols-2" v-if="basisList.length || actionList.length">
-          <article class="rounded-xl border border-border bg-bg/40 p-3" v-if="basisList.length">
-            <p class="text-sm font-medium">执行依据</p>
-            <ul class="mt-2 space-y-1 text-xs text-text-secondary">
-              <li v-for="item in basisList" :key="item">{{ item }}</li>
-            </ul>
-          </article>
-          <article class="rounded-xl border border-border bg-bg/40 p-3" v-if="actionList.length">
-            <p class="text-sm font-medium">建议动作</p>
-            <ul class="mt-2 space-y-1 text-xs text-text-secondary">
-              <li v-for="item in actionList" :key="item">{{ item }}</li>
-            </ul>
-          </article>
-        </div>
-
-        <article class="rounded-xl border border-border bg-bg/40 p-3">
-          <p class="text-sm font-medium">结果明细</p>
-          <n-data-table class="mt-2" :columns="resultColumns" :data="resultRows" :bordered="false" :max-height="320" />
-          <n-empty v-if="resultRows.length === 0" class="nd-empty-shell mt-2" description="当前任务暂无可视化明细，建议查看技术详情。" />
-        </article>
-
-        <n-collapse>
-          <n-collapse-item title="技术详情 / 调试信息（原始 JSON）" name="raw-json">
-            <pre class="rounded-xl border border-border bg-bg/50 p-3 text-xs leading-5">{{ prettyJson(currentRun?.result || {}) }}</pre>
-          </n-collapse-item>
-        </n-collapse>
-      </div>
-    </article>
-
-    <article class="nd-table-shell">
-      <div class="nd-table-head">
-        <div>
-          <h3 class="nd-section-title">历史记录</h3>
-          <p class="nd-section-subtitle">共 {{ total }} 条</p>
-        </div>
-        <n-button class="nd-soft-focus" :loading="loadingRuns" @click="loadRuns">刷新历史</n-button>
-      </div>
-      <div class="nd-table-body">
-        <n-data-table :columns="runColumns" :data="runs" :loading="loadingRuns" :bordered="false" />
-        <div class="mt-4 flex justify-end" v-if="total > 0">
-          <n-pagination
-            :page="pageNo"
-            :page-size="pageSize"
-            :item-count="total"
-            :page-sizes="[10, 20, 50]"
-            show-size-picker
-            @update:page="onPageChange"
-            @update:page-size="onPageSizeChange"
-          />
-        </div>
-      </div>
-    </article>
+    <AgentRunHistory
+      :runs="runs"
+      :total="total"
+      :page-no="pageNo"
+      :page-size="pageSize"
+      :loading-runs="loadingRuns"
+      :run-columns="runColumns"
+      @refresh="loadRuns"
+      @page-change="onPageChange"
+      @page-size-change="onPageSizeChange"
+    />
   </section>
 </template>
 
@@ -177,18 +66,12 @@ import { useRoute } from "vue-router";
 import {
   NAlert,
   NButton,
-  NCollapse,
-  NCollapseItem,
-  NDataTable,
-  NDescriptions,
-  NDescriptionsItem,
-  NEmpty,
-  NInput,
-  NInputNumber,
-  NPagination,
   useMessage
 } from "naive-ui";
 import type { DataTableColumns } from "naive-ui";
+import AgentRunHistory from "@/components/agent/AgentRunHistory.vue";
+import AgentRunResultPanel from "@/components/agent/AgentRunResultPanel.vue";
+import AgentTaskList from "@/components/agent/AgentTaskList.vue";
 import { agentApi, type AgentRunDetail, type AgentRunListItem, type AgentStepItem, type AgentTaskItem } from "@/services/agent";
 import { useAuthStore } from "@/stores/auth";
 
@@ -215,6 +98,15 @@ const canExecute = computed(() => authStore.hasPermission("AGENT_TASK_EXECUTE"))
 const selectedTask = computed(() => tasks.value.find((item) => item.taskCode === selectedTaskCode.value) ?? null);
 const currentSteps = computed(() => currentRun.value?.steps ?? []);
 const resultView = computed<Record<string, unknown>>(() => (currentRun.value?.result?.resultView as Record<string, unknown> | undefined) ?? {});
+
+interface AgentTaskParamView {
+  key: string;
+  label: string;
+  description: string;
+  type: "number" | "text" | "date";
+  defaultValue?: string | number;
+  placeholder?: string;
+}
 
 const taskMetaMap: Record<string, {
   taskName: string;
@@ -275,7 +167,7 @@ const taskMetaMap: Record<string, {
   }
 };
 
-const selectedTaskParams = computed(() => {
+const selectedTaskParams = computed<AgentTaskParamView[]>(() => {
   const task = selectedTask.value;
   if (!task?.params || task.params.length === 0) return [];
   return task.params.map((param) => {

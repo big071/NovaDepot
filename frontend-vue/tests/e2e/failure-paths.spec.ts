@@ -14,6 +14,24 @@ async function apiLogin(request: import("@playwright/test").APIRequestContext, u
   return token;
 }
 
+test("失败路径：登录失败响应不包含后端堆栈或敏感字段", async ({ request }) => {
+  const resp = await request.post(`${API_BASE}/auth/login`, {
+    data: {
+      tenantCode: "default",
+      username: `missing-user-${Date.now()}`,
+      password: "wrong-password"
+    }
+  });
+  expect(resp.status()).toBe(401);
+  const json = await resp.json();
+  expect(json?.code).toBe("AUTH-0001");
+  expect(String(json?.message ?? "")).toMatch(/Invalid username or password|用户名|密码|登录/);
+  const body = JSON.stringify(json);
+  expect(body).not.toContain("Exception");
+  expect(body).not.toContain("StackTrace");
+  expect(body).not.toContain("wrong-password");
+});
+
 test("失败路径：库存不足时发运失败并提示明确错误", async ({ page, request }) => {
   const warehouseToken = await apiLogin(request, "warehouse01");
   const adminToken = await apiLogin(request, "admin", "admin123");

@@ -6,6 +6,7 @@ import com.novadepot.backend.modules.auditlogs.AuditLogRecordService;
 import com.novadepot.backend.modules.auth.dto.LoginRequest;
 import com.novadepot.backend.modules.auth.dto.LoginResponse;
 import com.novadepot.backend.repository.AuthQueryMapper;
+import com.novadepot.backend.security.LoginRateLimitService;
 import com.novadepot.backend.security.jwt.JwtProperties;
 import com.novadepot.backend.security.jwt.JwtTokenService;
 import org.springframework.beans.factory.annotation.Value;
@@ -25,6 +26,7 @@ public class AuthService {
     private final JwtProperties jwtProperties;
     private final AuthQueryMapper authQueryMapper;
     private final AuditLogRecordService auditLogRecordService;
+    private final LoginRateLimitService loginRateLimitService;
     private final int passwordMinLength;
     private final boolean enforcePasswordStrengthOnLogin;
     private final boolean passwordRequireUppercase;
@@ -40,6 +42,7 @@ public class AuthService {
                        JwtProperties jwtProperties,
                        AuthQueryMapper authQueryMapper,
                        AuditLogRecordService auditLogRecordService,
+                       LoginRateLimitService loginRateLimitService,
                        @Value("${app.auth.password.min-length:8}") int passwordMinLength,
                        @Value("${app.auth.password.enforce-strength-on-login:false}") boolean enforcePasswordStrengthOnLogin,
                        @Value("${app.auth.password.require-uppercase:true}") boolean passwordRequireUppercase,
@@ -53,6 +56,7 @@ public class AuthService {
         this.jwtProperties = jwtProperties;
         this.authQueryMapper = authQueryMapper;
         this.auditLogRecordService = auditLogRecordService;
+        this.loginRateLimitService = loginRateLimitService;
         this.passwordMinLength = passwordMinLength;
         this.enforcePasswordStrengthOnLogin = enforcePasswordStrengthOnLogin;
         this.passwordRequireUppercase = passwordRequireUppercase;
@@ -64,7 +68,19 @@ public class AuthService {
         this.loginFailLockMinutes = Math.max(1, loginFailLockMinutes);
     }
 
-    public LoginResponse login(LoginRequest request) {
+    public LoginResponse login(LoginRequest request, String clientIp) {
+        loginRateLimitService.checkAllowed(clientIp, request.getTenantCode(), request.getUsername());
+        try {
+            LoginResponse response = doLogin(request);
+            loginRateLimitService.recordSuccess(clientIp, request.getTenantCode(), request.getUsername());
+            return response;
+        } catch (BizException ex) {
+            loginRateLimitService.recordFailure(clientIp, request.getTenantCode(), request.getUsername());
+            throw ex;
+        }
+    }
+
+    private LoginResponse doLogin(LoginRequest request) {
         validatePasswordPolicyForLogin(request);
 
         AuthUserRow user = authQueryMapper.findAuthUser(request.getTenantCode(), request.getUsername());

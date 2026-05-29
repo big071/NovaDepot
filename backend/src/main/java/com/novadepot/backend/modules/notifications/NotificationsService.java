@@ -32,11 +32,12 @@ public class NotificationsService {
 
         LambdaQueryWrapper<NotificationEntity> base = baseQuery(unreadOnly);
         Long total = notificationMapper.selectCount(base);
-        var rows = notificationMapper.selectList(baseQuery(unreadOnly)
-                .orderByAsc(NotificationEntity::getReadFlag)
-                .orderByDesc(NotificationEntity::getSentAt)
-                .orderByDesc(NotificationEntity::getId)
-                .last("limit " + offset + "," + safePageSize))
+        var rows = notificationMapper.selectMinePage(
+                        RequestContext.tenantId(),
+                        RequestContext.userId(),
+                        Boolean.TRUE.equals(unreadOnly),
+                        offset,
+                        safePageSize)
                 .stream()
                 .map(this::toView)
                 .toList();
@@ -95,13 +96,12 @@ public class NotificationsService {
                                              String content,
                                              String severity,
                                              String jumpPath) {
-        NotificationEntity existing = notificationMapper.selectOne(new LambdaQueryWrapper<NotificationEntity>()
-                .eq(NotificationEntity::getTenantId, RequestContext.tenantId())
-                .eq(NotificationEntity::getReceiverUserId, receiverUserId)
-                .eq(NotificationEntity::getNotifyType, notifyType)
-                .eq(StringUtils.hasText(bizType), NotificationEntity::getBizType, bizType)
-                .eq(StringUtils.hasText(bizNo), NotificationEntity::getBizNo, bizNo)
-                .last("limit 1"));
+        NotificationEntity existing = notificationMapper.selectExisting(
+                RequestContext.tenantId(),
+                receiverUserId,
+                notifyType,
+                StringUtils.hasText(bizType) ? bizType : null,
+                StringUtils.hasText(bizNo) ? bizNo : null);
         if (existing != null) {
             return existing;
         }
@@ -134,11 +134,7 @@ public class NotificationsService {
     }
 
     private NotificationEntity findMine(Long id) {
-        NotificationEntity entity = notificationMapper.selectOne(new LambdaQueryWrapper<NotificationEntity>()
-                .eq(NotificationEntity::getTenantId, RequestContext.tenantId())
-                .eq(NotificationEntity::getReceiverUserId, RequestContext.userId())
-                .eq(NotificationEntity::getId, id)
-                .last("limit 1"));
+        NotificationEntity entity = notificationMapper.selectMineById(RequestContext.tenantId(), RequestContext.userId(), id);
         if (entity == null) {
             throw new BizException(ErrorCode.BIZ_ERROR.code(), "通知不存在或无权访问");
         }

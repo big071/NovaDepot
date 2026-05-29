@@ -2,7 +2,7 @@
 
 NovaDepot is a smart warehouse management system, lightweight ERP, AI assistant, Agent patrol, and customer-service platform.
 
-Current release line: **v1.2 DeepSeek Intelligence Core** with **v1.2.1 AI Experience Hotfix** work on `hotfix/v1.2.1-ai-experience`.
+Current release line: **v1.3 Code Quality & Stability** on `develop/v1.3`, preserving the v1.2.1 AI Experience Hotfix behavior.
 
 ## Core Capabilities
 
@@ -15,7 +15,7 @@ Current release line: **v1.2 DeepSeek Intelligence Core** with **v1.2.1 AI Exper
 - Reports: inventory turnover, inbound/outbound summary, purchase/sales summary, ticket efficiency, and CSV export.
 - Audit: audit center, tool-call logs, export logs, and configurable audit-log cleanup.
 
-The system is still a single-tenant local Docker architecture with `tenant_id` fields reserved for future work. Multi-tenant runtime, billing, RAG, vector database, knowledge graph, external notification channels, and AI write actions are not included in v1.2.
+The system is still a single-tenant local Docker architecture with `tenant_id` fields reserved for future work. Multi-tenant runtime, billing, RAG, vector database, knowledge graph, external notification channels, and AI write actions are not included in v1.3.
 
 ## Tech Stack
 
@@ -63,6 +63,25 @@ AI_TOOLS_ENABLED=true
 AI_FALLBACK_ENABLED=false
 ```
 
+## Security Configuration
+
+Local Docker uses development-only defaults so the demo can start with one command.
+For any shared or production-like deployment, override these values through `.env`
+or the host environment and never commit the real values:
+
+```env
+JWT_SECRET=replace-with-at-least-32-random-characters
+DB_PASSWORD=replace-with-a-real-database-password
+AI_DEEPSEEK_API_KEY=
+APP_CORS_ALLOWED_ORIGINS=http://localhost:3100,http://127.0.0.1:3100
+APP_UPLOAD_MAX_FILE_SIZE=10MB
+APP_UPLOAD_MAX_REQUEST_SIZE=10MB
+APP_MAX_REQUEST_BODY_BYTES=10485760
+```
+
+`JWT_SECRET` must be at least 32 characters. `.env` files and real API keys,
+database passwords, JWT secrets, and access tokens must stay out of Git.
+
 For v1.2.1, RuleProvider is used only when `AI_PROVIDER=rule`, or when fallback is explicitly enabled with `AI_FALLBACK_ENABLED=true`. If `AI_PROVIDER=deepseek-chat`, `AI_DEEPSEEK_ENABLED=true`, and fallback is disabled, DeepSeek failures are reported clearly in the UI and recorded in `ai_usage_logs` with `success=0` and an error code.
 
 ## Common Commands
@@ -95,22 +114,22 @@ cd backend
 mvn test
 ```
 
-## v1.2 Scope Boundaries
+## v1.3 Scope Boundaries
 
 - No external notification channels: email, SMS, enterprise chat, or mobile push.
 - No AI automatic document creation, approval, inventory modification, or customer-message sending.
 - No custom report designer or BI real-time dashboard.
 - No RAG, vector database, knowledge graph, model training/fine-tuning, multi-tenant runtime, billing, or v2.0 features.
 - v1.1 WMS/ERP/CS/RBAC business flows remain preserved.
+- v1.2 DeepSeek Intelligence Core and v1.2.1 AI Experience Hotfix behavior remain preserved.
 
 ## Documentation
 
 Start with [docs/README.md](docs/README.md).
 
-Key v1.2 documents:
+Key v1.3 documents:
 
-- [v1.2 Progress Tracker](docs/95-v1.2-progress-tracker.md)
-- [v1.2 Sprint 4 Plan](docs/98-v1.2-sprint4-agent-notification-report-plan.md)
-- [v1.2 Release Notes](docs/99-v1.2-release-notes.md)
-- [v1.2 Delivery Notes](docs/100-v1.2-delivery-notes.md)
-- [v1.2 Acceptance Checklist](docs/101-v1.2-acceptance-checklist.md)
+- [v1.3 Release Notes](docs/111-v1.3-release-notes.md)
+- [v1.3 Delivery Notes](docs/112-v1.3-delivery-notes.md)
+- [v1.3 Acceptance Checklist](docs/113-v1.3-acceptance-checklist.md)
+- [v1.3 Final Quality Cleanup Plan](docs/110-v1.3-final-quality-cleanup-plan.md)

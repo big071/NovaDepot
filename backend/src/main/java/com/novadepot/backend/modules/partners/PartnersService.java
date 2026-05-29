@@ -14,11 +14,14 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.StringJoiner;
+import java.util.stream.Collectors;
 
 @Service
 public class PartnersService {
@@ -126,6 +129,7 @@ public class PartnersService {
         int skippedRows = 0;
         List<String> errors = new ArrayList<>();
         StringJoiner reportCsv = new StringJoiner("\n").add("行号,字段,错误原因,原始值");
+        Map<String, PartnerEntity> partnersByCode = preloadPartnersByCode(lines);
         for (int i = 1; i < lines.length; i++) {
             String line = lines[i];
             if (line == null || line.trim().isBlank()) continue;
@@ -153,9 +157,7 @@ public class PartnersService {
                 addImportError(errors, reportCsv, i + 1, "状态", "仅允许 ACTIVE / DISABLED", cols[6]);
                 continue;
             }
-            PartnerEntity existed = partnerMapper.selectOne(new LambdaQueryWrapper<PartnerEntity>()
-                    .eq(PartnerEntity::getTenantId, RequestContext.tenantId())
-                    .eq(PartnerEntity::getPartnerCode, code));
+            PartnerEntity existed = partnersByCode.get(code);
             if (existed != null) {
                 skippedRows++;
                 addImportError(errors, reportCsv, i + 1, "单位编码", "编码已存在，已跳过", code);
@@ -174,6 +176,7 @@ public class PartnersService {
             entity.setCreatedBy(RequestContext.userId());
             entity.setUpdatedBy(RequestContext.userId());
             partnerMapper.insert(entity);
+            partnersByCode.put(code, entity);
             successRows++;
         }
         String reportId = null;
@@ -200,6 +203,25 @@ public class PartnersService {
         summary.put("skippedRows", skippedRows);
         summary.put("errors", errors);
         return summary;
+    }
+
+    private Map<String, PartnerEntity> preloadPartnersByCode(String[] lines) {
+        Set<String> codes = java.util.Arrays.stream(lines)
+                .skip(1)
+                .filter(line -> line != null && !line.trim().isBlank())
+                .map(line -> line.split(",", -1))
+                .filter(cols -> cols.length >= 1)
+                .map(cols -> unquote(cols[0]))
+                .filter(code -> code != null && !code.isBlank())
+                .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
+        if (codes.isEmpty()) {
+            return new HashMap<>();
+        }
+        return partnerMapper.selectList(new LambdaQueryWrapper<PartnerEntity>()
+                        .eq(PartnerEntity::getTenantId, RequestContext.tenantId())
+                        .in(PartnerEntity::getPartnerCode, codes))
+                .stream()
+                .collect(Collectors.toMap(PartnerEntity::getPartnerCode, item -> item, (a, b) -> a, HashMap::new));
     }
 
     private void apply(PartnerEntity entity, PartnerRequest req) {

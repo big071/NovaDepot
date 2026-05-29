@@ -23,10 +23,13 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.StringJoiner;
+import java.util.stream.Collectors;
 
 @Service
 public class InventoryService {
@@ -64,10 +67,7 @@ public class InventoryService {
     }
 
     public List<InventoryTransactionEntity> transactions() {
-        return inventoryTransactionMapper.selectList(new LambdaQueryWrapper<InventoryTransactionEntity>()
-                .eq(InventoryTransactionEntity::getTenantId, RequestContext.tenantId())
-                .orderByDesc(InventoryTransactionEntity::getOccurredAt)
-                .last("limit 200"));
+        return inventoryTransactionMapper.selectRecent(RequestContext.tenantId(), 200);
     }
 
     public List<InventoryEntity> lowStockAlerts() {
@@ -134,6 +134,7 @@ public class InventoryService {
             throw new BizException(ErrorCode.BIZ_ERROR.code(), "CSV header must contain Chinese inventory columns");
         }
         CsvImportResult result = new CsvImportResult(lines.length - 1);
+        InventoryImportContext importContext = preloadInventoryContext(lines);
         for (int i = 1; i < lines.length; i++) {
             String line = lines[i];
             if (line == null || line.trim().isBlank()) continue;
@@ -142,9 +143,9 @@ public class InventoryService {
                 result.addError(i + 1, "整行", "列数量不足", line);
                 continue;
             }
-            WarehouseEntity warehouse = findWarehouse(unquote(cols[0]));
-            WarehouseLocationEntity location = warehouse == null ? null : findLocation(warehouse.getId(), unquote(cols[1]));
-            ProductEntity product = findProduct(unquote(cols[2]));
+            WarehouseEntity warehouse = importContext.warehousesByCode().get(unquote(cols[0]));
+            WarehouseLocationEntity location = warehouse == null ? null : importContext.locationsByKey().get(locationKey(warehouse.getId(), unquote(cols[1])));
+            ProductEntity product = importContext.productsByCode().get(unquote(cols[2]));
             BigDecimal availableQty = parseDecimal(unquote(cols[3]));
             if (warehouse == null) {
                 result.addError(i + 1, "仓库编码", "仓库不存在", cols[0]);
@@ -162,11 +163,8 @@ public class InventoryService {
                 result.addError(i + 1, "可用数量", "必须为非负数字", cols[3]);
                 continue;
             }
-            InventoryEntity existed = inventoryMapper.selectOne(new LambdaQueryWrapper<InventoryEntity>()
-                    .eq(InventoryEntity::getTenantId, RequestContext.tenantId())
-                    .eq(InventoryEntity::getWarehouseId, warehouse.getId())
-                    .eq(InventoryEntity::getLocationId, location.getId())
-                    .eq(InventoryEntity::getProductId, product.getId()));
+            InventoryKey inventoryKey = new InventoryKey(warehouse.getId(), location.getId(), product.getId());
+            InventoryEntity existed = importContext.inventoryByKey().get(inventoryKey);
             BigDecimal before = existed == null ? BigDecimal.ZERO : existed.getAvailableQty();
             if (existed == null) {
                 existed = new InventoryEntity();
@@ -186,10 +184,88 @@ public class InventoryService {
             } else {
                 inventoryMapper.updateById(existed);
             }
+            importContext.inventoryByKey().put(inventoryKey, existed);
             writeImportTransaction(warehouse.getId(), location.getId(), product.getId(), before, availableQty);
             result.successRows++;
         }
         return result;
+    }
+
+    private InventoryImportContext preloadInventoryContext(String[] lines) {
+        Set<String> warehouseCodes = new java.util.LinkedHashSet<>();
+        Set<String> locationCodes = new java.util.LinkedHashSet<>();
+        Set<String> productCodes = new java.util.LinkedHashSet<>();
+        for (int i = 1; i < lines.length; i++) {
+            String line = lines[i];
+            if (line == null || line.trim().isBlank()) continue;
+            String[] cols = line.split(",", -1);
+            if (cols.length < 4) continue;
+            String warehouseCode = unquote(cols[0]);
+            String locationCode = unquote(cols[1]);
+            String productCode = unquote(cols[2]);
+            if (!warehouseCode.isBlank()) warehouseCodes.add(warehouseCode);
+            if (!locationCode.isBlank()) locationCodes.add(locationCode);
+            if (!productCode.isBlank()) productCodes.add(productCode);
+        }
+
+        Map<String, WarehouseEntity> warehousesByCode = warehouseCodes.isEmpty()
+                ? new HashMap<>()
+                : warehouseMapper.selectList(new LambdaQueryWrapper<WarehouseEntity>()
+                        .eq(WarehouseEntity::getTenantId, RequestContext.tenantId())
+                        .in(WarehouseEntity::getWarehouseCode, warehouseCodes))
+                .stream()
+                .collect(Collectors.toMap(WarehouseEntity::getWarehouseCode, item -> item, (a, b) -> a, HashMap::new));
+        Map<String, ProductEntity> productsByCode = productCodes.isEmpty()
+                ? new HashMap<>()
+                : productMapper.selectList(new LambdaQueryWrapper<ProductEntity>()
+                        .eq(ProductEntity::getTenantId, RequestContext.tenantId())
+                        .in(ProductEntity::getProductCode, productCodes))
+                .stream()
+                .collect(Collectors.toMap(ProductEntity::getProductCode, item -> item, (a, b) -> a, HashMap::new));
+        Map<String, WarehouseLocationEntity> locationsByKey = locationCodes.isEmpty()
+                ? new HashMap<>()
+                : locationMapper.selectList(new LambdaQueryWrapper<WarehouseLocationEntity>()
+                        .eq(WarehouseLocationEntity::getTenantId, RequestContext.tenantId())
+                        .in(WarehouseLocationEntity::getLocationCode, locationCodes))
+                .stream()
+                .collect(Collectors.toMap(item -> locationKey(item.getWarehouseId(), item.getLocationCode()), item -> item, (a, b) -> a, HashMap::new));
+
+        Set<InventoryKey> inventoryKeys = new java.util.LinkedHashSet<>();
+        for (int i = 1; i < lines.length; i++) {
+            String line = lines[i];
+            if (line == null || line.trim().isBlank()) continue;
+            String[] cols = line.split(",", -1);
+            if (cols.length < 4) continue;
+            WarehouseEntity warehouse = warehousesByCode.get(unquote(cols[0]));
+            ProductEntity product = productsByCode.get(unquote(cols[2]));
+            WarehouseLocationEntity location = warehouse == null ? null : locationsByKey.get(locationKey(warehouse.getId(), unquote(cols[1])));
+            if (warehouse != null && location != null && product != null) {
+                inventoryKeys.add(new InventoryKey(warehouse.getId(), location.getId(), product.getId()));
+            }
+        }
+        Map<InventoryKey, InventoryEntity> inventoryByKey = preloadInventoryByKey(inventoryKeys);
+        return new InventoryImportContext(warehousesByCode, locationsByKey, productsByCode, inventoryByKey);
+    }
+
+    private Map<InventoryKey, InventoryEntity> preloadInventoryByKey(Set<InventoryKey> inventoryKeys) {
+        if (inventoryKeys.isEmpty()) {
+            return new HashMap<>();
+        }
+        Set<Long> warehouseIds = inventoryKeys.stream().map(InventoryKey::warehouseId).collect(Collectors.toSet());
+        Set<Long> locationIds = inventoryKeys.stream().map(InventoryKey::locationId).collect(Collectors.toSet());
+        Set<Long> productIds = inventoryKeys.stream().map(InventoryKey::productId).collect(Collectors.toSet());
+        return inventoryMapper.selectList(new LambdaQueryWrapper<InventoryEntity>()
+                        .eq(InventoryEntity::getTenantId, RequestContext.tenantId())
+                        .in(InventoryEntity::getWarehouseId, warehouseIds)
+                        .in(InventoryEntity::getLocationId, locationIds)
+                        .in(InventoryEntity::getProductId, productIds))
+                .stream()
+                .filter(item -> inventoryKeys.contains(new InventoryKey(item.getWarehouseId(), item.getLocationId(), item.getProductId())))
+                .collect(Collectors.toMap(item -> new InventoryKey(item.getWarehouseId(), item.getLocationId(), item.getProductId()), item -> item, (a, b) -> a, HashMap::new));
+    }
+
+    private String locationKey(Long warehouseId, String locationCode) {
+        return warehouseId + "|" + locationCode;
     }
 
     private void writeImportTransaction(Long warehouseId, Long locationId, Long productId, BigDecimal before, BigDecimal after) {
@@ -237,25 +313,6 @@ public class InventoryService {
         return reportId;
     }
 
-    private WarehouseEntity findWarehouse(String code) {
-        return warehouseMapper.selectOne(new LambdaQueryWrapper<WarehouseEntity>()
-                .eq(WarehouseEntity::getTenantId, RequestContext.tenantId())
-                .eq(WarehouseEntity::getWarehouseCode, code));
-    }
-
-    private WarehouseLocationEntity findLocation(Long warehouseId, String code) {
-        return locationMapper.selectOne(new LambdaQueryWrapper<WarehouseLocationEntity>()
-                .eq(WarehouseLocationEntity::getTenantId, RequestContext.tenantId())
-                .eq(WarehouseLocationEntity::getWarehouseId, warehouseId)
-                .eq(WarehouseLocationEntity::getLocationCode, code));
-    }
-
-    private ProductEntity findProduct(String code) {
-        return productMapper.selectOne(new LambdaQueryWrapper<ProductEntity>()
-                .eq(ProductEntity::getTenantId, RequestContext.tenantId())
-                .eq(ProductEntity::getProductCode, code));
-    }
-
     private BigDecimal parseDecimal(String value) {
         if (value == null || value.isBlank() || value.contains(",")) return null;
         try {
@@ -284,6 +341,15 @@ public class InventoryService {
 
     private String safe(String value) {
         return value == null ? "" : value.replace("\"", "'");
+    }
+
+    private record InventoryImportContext(Map<String, WarehouseEntity> warehousesByCode,
+                                          Map<String, WarehouseLocationEntity> locationsByKey,
+                                          Map<String, ProductEntity> productsByCode,
+                                          Map<InventoryKey, InventoryEntity> inventoryByKey) {
+    }
+
+    private record InventoryKey(Long warehouseId, Long locationId, Long productId) {
     }
 
     private class CsvImportResult {

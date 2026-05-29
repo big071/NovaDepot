@@ -11,8 +11,12 @@ spring:
 
 app:
   jwt:
-    secret: change_me_in_test_please
+    secret: test_only_jwt_secret_32_chars_minimum
     expire-seconds: 7200
+  auth:
+    login:
+      rate-limit:
+        enabled: false
   ai:
     provider: rule
     paid-enabled: false

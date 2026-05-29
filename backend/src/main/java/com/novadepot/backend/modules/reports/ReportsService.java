@@ -8,7 +8,6 @@ import com.novadepot.backend.model.entity.CustomerServiceSessionEntity;
 import com.novadepot.backend.model.entity.CustomerServiceTicketEntity;
 import com.novadepot.backend.model.entity.InboundOrderEntity;
 import com.novadepot.backend.model.entity.InventoryEntity;
-import com.novadepot.backend.model.entity.InventoryTransactionEntity;
 import com.novadepot.backend.model.entity.OutboundOrderEntity;
 import com.novadepot.backend.model.entity.PurchaseOrderEntity;
 import com.novadepot.backend.model.entity.SalesOrderEntity;
@@ -39,7 +38,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.StringJoiner;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -209,25 +207,20 @@ public class ReportsService {
 
     public Map<String, Object> inventoryTurnover(String dateFrom, String dateTo, Long warehouseId) {
         DateRange range = parseRange(dateFrom, dateTo);
-        List<InventoryTransactionEntity> txns = inventoryTransactionMapper.selectList(new LambdaQueryWrapper<InventoryTransactionEntity>()
-                .eq(InventoryTransactionEntity::getTenantId, RequestContext.tenantId())
-                .eq(warehouseId != null, InventoryTransactionEntity::getWarehouseId, warehouseId)
-                .ge(InventoryTransactionEntity::getOccurredAt, range.start())
-                .lt(InventoryTransactionEntity::getOccurredAt, range.end()));
-        Map<Long, BigDecimal> outboundQty = txns.stream()
-                .filter(txn -> "OUTBOUND_SHIP".equalsIgnoreCase(String.valueOf(txn.getBizType())) || (txn.getChangeQty() != null && txn.getChangeQty().signum() < 0))
-                .collect(Collectors.groupingBy(InventoryTransactionEntity::getProductId, LinkedHashMap::new,
-                        Collectors.reducing(BigDecimal.ZERO, txn -> abs(txn.getChangeQty()), BigDecimal::add)));
-        Map<Long, BigDecimal> stockQty = inventoryMapper.selectList(new LambdaQueryWrapper<InventoryEntity>()
-                        .eq(InventoryEntity::getTenantId, RequestContext.tenantId())
-                        .eq(warehouseId != null, InventoryEntity::getWarehouseId, warehouseId))
+        Map<Long, BigDecimal> outboundQty = inventoryTransactionMapper
+                .sumOutboundByProduct(RequestContext.tenantId(), warehouseId, range.start(), range.end())
                 .stream()
-                .collect(Collectors.groupingBy(InventoryEntity::getProductId, LinkedHashMap::new,
-                        Collectors.reducing(BigDecimal.ZERO, row -> value(row.getAvailableQty()), BigDecimal::add)));
+                .collect(Collectors.toMap(InventoryTurnoverMetric::getProductId, row -> value(row.getOutboundQty()), (a, b) -> a, LinkedHashMap::new));
+        Map<Long, BigDecimal> stockQty = inventoryMapper
+                .sumAvailableByProduct(RequestContext.tenantId(), warehouseId)
+                .stream()
+                .collect(Collectors.toMap(InventoryTurnoverMetric::getProductId, row -> value(row.getAvailableQty()), (a, b) -> a, LinkedHashMap::new));
         Set<Long> productIds = new java.util.HashSet<>();
         productIds.addAll(outboundQty.keySet());
         productIds.addAll(stockQty.keySet());
-        Map<Long, String> productNames = productMapper.selectBatchIds(productIds).stream()
+        Map<Long, String> productNames = productIds.isEmpty()
+                ? Map.of()
+                : productMapper.selectBatchIds(productIds).stream()
                 .filter(com.novadepot.backend.model.entity.ProductEntity.class::isInstance)
                 .map(com.novadepot.backend.model.entity.ProductEntity.class::cast)
                 .collect(Collectors.toMap(com.novadepot.backend.model.entity.ProductEntity::getId, p -> p.getProductCode() + " / " + p.getProductName(), (a, b) -> a));
@@ -243,12 +236,8 @@ public class ReportsService {
     public Map<String, Object> inoutSummary(String dateFrom, String dateTo, String grain) {
         DateRange range = parseRange(dateFrom, dateTo);
         boolean week = "WEEK".equalsIgnoreCase(grain);
-        List<InboundOrderEntity> inbound = inboundOrderMapper.selectList(new LambdaQueryWrapper<InboundOrderEntity>()
-                .eq(InboundOrderEntity::getTenantId, RequestContext.tenantId()).ge(InboundOrderEntity::getCreatedAt, range.start()).lt(InboundOrderEntity::getCreatedAt, range.end()));
-        List<OutboundOrderEntity> outbound = outboundOrderMapper.selectList(new LambdaQueryWrapper<OutboundOrderEntity>()
-                .eq(OutboundOrderEntity::getTenantId, RequestContext.tenantId()).ge(OutboundOrderEntity::getCreatedAt, range.start()).lt(OutboundOrderEntity::getCreatedAt, range.end()));
-        Map<String, Long> inboundMap = inbound.stream().collect(Collectors.groupingBy(row -> bucket(row.getCreatedAt(), week), LinkedHashMap::new, Collectors.counting()));
-        Map<String, Long> outboundMap = outbound.stream().collect(Collectors.groupingBy(row -> bucket(row.getCreatedAt(), week), LinkedHashMap::new, Collectors.counting()));
+        Map<String, Long> inboundMap = groupPeriodCounts(inboundOrderMapper.countByDay(RequestContext.tenantId(), range.start(), range.end()), week);
+        Map<String, Long> outboundMap = groupPeriodCounts(outboundOrderMapper.countByDay(RequestContext.tenantId(), range.start(), range.end()), week);
         Set<String> keys = new java.util.TreeSet<>();
         keys.addAll(inboundMap.keySet());
         keys.addAll(outboundMap.keySet());
@@ -258,35 +247,29 @@ public class ReportsService {
 
     public Map<String, Object> purchaseSalesSummary(String dateFrom, String dateTo, Long partnerId) {
         DateRange range = parseRange(dateFrom, dateTo);
-        List<PurchaseOrderEntity> purchases = purchaseOrderMapper.selectList(new LambdaQueryWrapper<PurchaseOrderEntity>()
-                .eq(PurchaseOrderEntity::getTenantId, RequestContext.tenantId())
-                .eq(partnerId != null, PurchaseOrderEntity::getPartnerId, partnerId)
-                .ge(PurchaseOrderEntity::getCreatedAt, range.start()).lt(PurchaseOrderEntity::getCreatedAt, range.end()));
-        List<SalesOrderEntity> sales = salesOrderMapper.selectList(new LambdaQueryWrapper<SalesOrderEntity>()
-                .eq(SalesOrderEntity::getTenantId, RequestContext.tenantId())
-                .eq(partnerId != null, SalesOrderEntity::getPartnerId, partnerId)
-                .ge(SalesOrderEntity::getCreatedAt, range.start()).lt(SalesOrderEntity::getCreatedAt, range.end()));
-        BigDecimal purchaseAmount = purchases.stream().map(PurchaseOrderEntity::getTotalAmount).map(this::value).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal salesAmount = sales.stream().map(SalesOrderEntity::getTotalAmount).map(this::value).reduce(BigDecimal.ZERO, BigDecimal::add);
+        AmountSummaryMetric purchase = purchaseOrderMapper.selectAmountSummary(RequestContext.tenantId(), partnerId, range.start(), range.end());
+        AmountSummaryMetric sale = salesOrderMapper.selectAmountSummary(RequestContext.tenantId(), partnerId, range.start(), range.end());
+        long purchaseCount = countValue(purchase == null ? null : purchase.getCount());
+        long salesCount = countValue(sale == null ? null : sale.getCount());
+        BigDecimal purchaseAmount = value(purchase == null ? null : purchase.getAmount());
+        BigDecimal salesAmount = value(sale == null ? null : sale.getAmount());
         List<Map<String, Object>> rows = List.of(
-                row("type", "采购", "count", purchases.size(), "amount", purchaseAmount),
-                row("type", "销售", "count", sales.size(), "amount", salesAmount),
-                row("type", "净额", "count", sales.size() - purchases.size(), "amount", salesAmount.subtract(purchaseAmount))
+                row("type", "采购", "count", purchaseCount, "amount", purchaseAmount),
+                row("type", "销售", "count", salesCount, "amount", salesAmount),
+                row("type", "净额", "count", salesCount - purchaseCount, "amount", salesAmount.subtract(purchaseAmount))
         );
         return report("purchaseSalesSummary", range, rows);
     }
 
     public Map<String, Object> ticketEfficiency(String dateFrom, String dateTo, Long assigneeId) {
         DateRange range = parseRange(dateFrom, dateTo);
-        List<CustomerServiceTicketEntity> tickets = customerServiceTicketMapper.selectList(new LambdaQueryWrapper<CustomerServiceTicketEntity>()
-                .eq(CustomerServiceTicketEntity::getTenantId, RequestContext.tenantId())
-                .eq(assigneeId != null, CustomerServiceTicketEntity::getAssigneeUserId, assigneeId)
-                .ge(CustomerServiceTicketEntity::getCreatedAt, range.start()).lt(CustomerServiceTicketEntity::getCreatedAt, range.end()));
-        Map<Long, List<CustomerServiceTicketEntity>> grouped = tickets.stream().collect(Collectors.groupingBy(t -> t.getAssigneeUserId() == null ? 0L : t.getAssigneeUserId(), LinkedHashMap::new, Collectors.toList()));
-        List<Map<String, Object>> rows = grouped.entrySet().stream().map(entry -> {
-            long total = entry.getValue().size();
-            long closed = entry.getValue().stream().filter(t -> Set.of("CLOSED", "RESOLVED").contains(String.valueOf(t.getStatus()).toUpperCase())).count();
-            return row("assigneeId", entry.getKey(), "ticketCount", total, "closedCount", closed, "closeRate", total == 0 ? BigDecimal.ZERO : BigDecimal.valueOf(closed).divide(BigDecimal.valueOf(total), 4, java.math.RoundingMode.HALF_UP));
+        List<Map<String, Object>> rows = customerServiceTicketMapper
+                .selectEfficiencyByAssignee(RequestContext.tenantId(), assigneeId, range.start(), range.end())
+                .stream()
+                .map(entry -> {
+            long total = countValue(entry.getTicketCount());
+            long closed = countValue(entry.getClosedCount());
+            return row("assigneeId", entry.getAssigneeId(), "ticketCount", total, "closedCount", closed, "closeRate", total == 0 ? BigDecimal.ZERO : BigDecimal.valueOf(closed).divide(BigDecimal.valueOf(total), 4, java.math.RoundingMode.HALF_UP));
         }).toList();
         return report("ticketEfficiency", range, rows);
     }
@@ -324,9 +307,29 @@ public class ReportsService {
     private String bucket(LocalDateTime time, boolean week) {
         if (time == null) return "-";
         LocalDate date = time.toLocalDate();
+        return bucket(date, week);
+    }
+
+    private String bucket(LocalDate date, boolean week) {
+        if (date == null) return "-";
         if (!week) return date.toString();
         int weekNo = date.get(WeekFields.ISO.weekOfWeekBasedYear());
         return date.getYear() + "-W" + String.format("%02d", weekNo);
+    }
+
+    private Map<String, Long> groupPeriodCounts(List<PeriodCountMetric> counts, boolean week) {
+        if (counts == null || counts.isEmpty()) {
+            return Map.of();
+        }
+        return counts.stream().collect(Collectors.groupingBy(
+                item -> bucket(LocalDate.parse(item.getPeriod()), week),
+                LinkedHashMap::new,
+                Collectors.summingLong(item -> countValue(item.getCount()))
+        ));
+    }
+
+    private long countValue(Long value) {
+        return value == null ? 0L : value;
     }
 
     private BigDecimal value(BigDecimal value) {
@@ -350,14 +353,17 @@ public class ReportsService {
             return "\uFEFF暂无数据\n";
         }
         List<String> headers = new ArrayList<>(rows.get(0).keySet());
-        StringBuilder sb = new StringBuilder("\uFEFF");
+        StringBuilder sb = new StringBuilder(Math.max(64, rows.size() * headers.size() * 16));
+        sb.append("\uFEFF");
         sb.append(String.join(",", headers)).append("\n");
         for (Map<String, Object> row : rows) {
-            StringJoiner joiner = new StringJoiner(",");
-            for (String header : headers) {
-                joiner.add(escape(row.get(header)));
+            for (int i = 0; i < headers.size(); i++) {
+                if (i > 0) {
+                    sb.append(",");
+                }
+                sb.append(escape(row.get(headers.get(i))));
             }
-            sb.append(joiner).append("\n");
+            sb.append("\n");
         }
         return sb.toString();
     }
