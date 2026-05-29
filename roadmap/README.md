@@ -22,7 +22,7 @@ Agent 任务            + 打印模板               + 站内通知中心
                       + tenant_id 预埋
 
 v1.3                                      v2.0
-ACTIVE                                    PLANNED
+READY FOR RELEASE                         PLANNED
 ────────────────────────────────────────────────────────────────────────────────
 代码质量 + 稳定性加固                      SaaS 商业化
 Service 拆分解耦                           多租户架构
@@ -47,7 +47,7 @@ E2E 扩展
 | [v1.1](./01-v1.1-procurement-sales-closure.md)      | RELEASED          | 已完成   | 进销存闭合 + 仓库运营刚需                             |
 | [v1.2](./02-v1.2-deepseek-intelligence-core.md)     | RELEASED          | 已完成   | DeepSeek 智能核心 + 运营工具                          |
 | v1.2.1                                              | MERGED / HOTFIX   | Hotfix   | AI 体验修复：结构化回答、工具结果融合、失败不伪装降级 |
-| [v1.3](./04-v1.3-code-quality-and-stability.md)     | ACTIVE            | 4-6 周   | 代码质量 + 稳定性加固（零新功能）                     |
+| [v1.3](./04-v1.3-code-quality-and-stability.md)     | READY FOR RELEASE | 4-6 周   | 代码质量 + 稳定性加固（零新功能）                     |
 | [v2.0](./03-v2.0-platform-and-commercialization.md) | PLANNED           | 10-14 周 | 多租户 SaaS + 商业化                                  |
 
 > v1.2.1 已合并到 `main`。当前仓库仍未创建 `v1.2.1` tag；如需正式发布 tag，必须单独确认并执行发布流程。不要移动 `v1.2` tag。
@@ -187,7 +187,7 @@ v1.2 不做：
 
 ### v1.3 — Code Quality & Stability
 
-状态：ACTIVE
+状态：READY FOR RELEASE
 
 定位：质量加固阶段，零新业务功能。
 

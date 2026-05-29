@@ -12,6 +12,9 @@
 | 108 | [v1.3 Sprint Q6 Frontend Component and Type Safety Cleanup](108-v1.3-frontend-component-type-safety-plan.md) | v1.3 Q6 AI page component split, TypeScript cleanup, and Vitest foundation |
 | 109 | [v1.3 Backend Residual Cleanup Plan](109-v1.3-backend-residual-cleanup-plan.md) | v1.3 Q7-Q9 backend residual query, reports, Agent, and notification cleanup plan |
 | 110 | [v1.3 Final Quality Cleanup Plan](110-v1.3-final-quality-cleanup-plan.md) | v1.3 Q10-Q12 CustomerService/Knowledge, non-AI frontend, and Docker/CI/static analysis cleanup plan |
+| 111 | [v1.3 Release Notes](111-v1.3-release-notes.md) | v1.3 code quality and stability release notes, compatibility notes, and backlog |
+| 112 | [v1.3 Delivery Notes](112-v1.3-delivery-notes.md) | v1.3 delivered scope, startup, configuration, validation, and release follow-up |
+| 113 | [v1.3 Acceptance Checklist](113-v1.3-acceptance-checklist.md) | v1.3 final roadmap, behavior preservation, quality gate, and release checklist |
 
 ## v1.2 DeepSeek Intelligence
 
