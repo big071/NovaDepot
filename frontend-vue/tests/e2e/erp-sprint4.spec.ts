@@ -33,9 +33,9 @@ test("Sprint 4: CSV templates, partial imports, and error reports work", async (
 
   const productCsv = [
     "商品编码,商品名称,分类编码,单位编码,条码,规格,启用批次,保质期天数,状态",
-    `SKU-E2E-S4-${suffix},Sprint4 Product,CAT-FOOD,UNIT-PCS,690${suffix},box,false,365,ACTIVE`,
-    `SKU-E2E-S4-${suffix},Duplicate Product,CAT-FOOD,UNIT-PCS,690${suffix},box,false,365,ACTIVE`,
-    `SKU-E2E-S4-BAD-${suffix},Bad Product,CAT-FOOD,UNIT-PCS,690${suffix}9,box,false,-1,ACTIVE`
+    `SKU-CSV-OFF-${suffix},得力订书钉 CSV 导入,CAT-FOOD,UNIT-PCS,690${suffix},1000枚/盒;门店补货,false,365,ACTIVE`,
+    `SKU-CSV-OFF-${suffix},重复编码办公耗材,CAT-FOOD,UNIT-PCS,690${suffix},重复编码校验,false,365,ACTIVE`,
+    `SKU-CSV-BAD-${suffix},保质期异常办公耗材,CAT-FOOD,UNIT-PCS,690${suffix}9,保质期异常校验,false,-1,ACTIVE`
   ].join("\n");
   const productImport = await request.post(`${API_BASE}/products/import`, {
     headers: csvHeaders(adminToken),
@@ -82,7 +82,7 @@ test("Sprint 4: CSV templates, partial imports, and error reports work", async (
 
   const inventoryCsv = [
     "仓库编码,库位编码,商品编码,可用数量,批次号,备注",
-    `${warehouse.warehouseCode},${location!.locationCode},${product.productCode},3,,e2e import`
+    `${warehouse.warehouseCode},${location!.locationCode},${product.productCode},3,,CSV库存导入补货`
   ].join("\n");
   const inventoryImport = await request.post(`${API_BASE}/inventory/import`, {
     headers: csvHeaders(warehouseToken),
@@ -103,8 +103,8 @@ test("Sprint 4: CSV templates, partial imports, and error reports work", async (
 
   const partnerCsv = [
     "单位编码,单位名称,单位类型,联系人,电话,地址,状态,备注",
-    `PT-E2E-S4-${suffix},Sprint4 Partner,CUSTOMER,E2E,13800000000,Shanghai,ACTIVE,e2e`,
-    `PT-E2E-S4-BAD-${suffix},Bad Partner,INVALID,E2E,13800000001,Shanghai,ACTIVE,e2e`
+    `PT-CSV-CUS-${suffix},珠海香洲门店 CSV,CUSTOMER,何静,13800000000,珠海市香洲区人民东路 16 号,ACTIVE,CSV导入门店客户`,
+    `PT-CSV-BAD-${suffix},无效类型门店客户,INVALID,何静,13800000001,珠海市香洲区人民东路 16 号,ACTIVE,CSV导入错误校验`
   ].join("\n");
   const partnerImport = await request.post(`${API_BASE}/partners/import`, {
     headers: csvHeaders(csToken),

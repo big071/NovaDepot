@@ -51,6 +51,16 @@ Open:
 | `cs01` | `pass123` | Customer service operations |
 | `observer01` | `pass123` | Read-only observer |
 
+## Demo Data
+
+The commercial baseline uses realistic Chinese business demo data instead of placeholder products, warehouses, customers, suppliers, orders, tickets, FAQ, and SOP entries. The scenario centers on office supplies, computer accessories, cleaning goods, packaging, warehouse supplies, and daily-use goods across 广州中心仓、深圳前置仓、佛山备货仓 and regional store customers.
+
+Reset the baseline at any time with:
+
+```powershell
+./scripts/ops/reset-commercial-baseline.ps1
+```
+
 ## AI Configuration
 
 Local no-key operation is the default and must remain runnable:
@@ -86,7 +96,7 @@ For v1.2.1, RuleProvider is used only when `AI_PROVIDER=rule`, or when fallback 
 
 ## Common Commands
 
-Reset sample data to the commercial baseline:
+Reset demo data to the commercial baseline:
 
 ```powershell
 ./scripts/ops/reset-commercial-baseline.ps1
@@ -133,4 +143,5 @@ Key v1.4 documents:
 - [v1.4 Release Notes](docs/116-v1.4-release-notes.md)
 - [v1.4 Delivery Notes](docs/117-v1.4-delivery-notes.md)
 - [v1.4 Acceptance Checklist](docs/118-v1.4-acceptance-checklist.md)
+- [v1.4 Demo Data Realism](docs/119-v1.4-demo-data-realism.md)
 - [v1.4 Ops & Admin Readiness Plan](docs/114-v1.4-ops-admin-readiness-plan.md)

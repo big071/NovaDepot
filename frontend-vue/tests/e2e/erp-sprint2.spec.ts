@@ -31,7 +31,7 @@ test("Sprint 2: sales order creates outbound draft and WMS shows target", async 
   await loginAs(page, "cs01");
   await goToPath(page, "/erp/sales");
   await expect(page.getByRole("heading", { name: "销售管理" })).toBeVisible();
-  const row = page.locator("tr", { hasText: "SO-V11-UI-001" }).first();
+  const row = page.locator("tr", { hasText: "SO-202606-004" }).first();
   await expect(row).toBeVisible();
   await row.getByRole("button", { name: "生成出库草稿" }).click();
   await expect(page.getByText("只生成 DRAFT 出库单")).toBeVisible();

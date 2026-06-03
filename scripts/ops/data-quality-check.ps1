@@ -76,6 +76,56 @@ select
   if ($garbledCount -gt 0) { throw "garbled text rows found: $garbledCount" }
   Write-Host "garbled text check passed"
 
+  Write-Host "[data-quality] demo realism placeholder check"
+  $placeholderCount = [int](Query-Scalar @"
+select
+  (select count(*) from products where tenant_id=1 and (
+    product_name regexp 'Product A|Product B|Sprint4 Product|Duplicate Product|Bad Product|test product|fake data|LEGACY_TEXT'
+    or product_code regexp 'SKU-001|ITEM-001|TEST-001|SKU-SAMPLE'
+  )) +
+  (select count(*) from warehouses where tenant_id=1 and (
+    warehouse_name regexp 'Warehouse 1|LEGACY_TEXT'
+    or warehouse_code regexp 'WH-SH-01'
+  )) +
+  (select count(*) from warehouse_locations where tenant_id=1 and (
+    location_name regexp 'Location A|LEGACY_TEXT'
+  )) +
+  (select count(*) from suppliers where tenant_id=1 and (
+    supplier_name regexp 'supplier001|LEGACY_TEXT'
+  )) +
+  (select count(*) from customers where tenant_id=1 and (
+    customer_name regexp 'customer001|LEGACY_TEXT'
+  )) +
+  (select count(*) from partners where tenant_id=1 and (
+    partner_name regexp 'Sprint4 Partner|Bad Partner|sample|LEGACY_TEXT'
+  )) +
+  (select count(*) from purchase_orders where tenant_id=1 and (
+    remark regexp 'sample|demo order|fake data|LEGACY_TEXT'
+  )) +
+  (select count(*) from sales_orders where tenant_id=1 and (
+    remark regexp 'sample|demo order|fake data|LEGACY_TEXT'
+  )) +
+  (select count(*) from customer_service_messages where tenant_id=1 and (
+    content regexp 'Customer service conversation|sample|fake data|LEGACY_TEXT'
+  )) +
+  (select count(*) from customer_service_tickets where tenant_id=1 and (
+    content regexp 'Ticket for session|sample|fake data|LEGACY_TEXT'
+  )) +
+  (select count(*) from faq_knowledge where tenant_id=1 and (
+    question regexp 'FAQ Q|sample|fake data|LEGACY_TEXT'
+    or answer regexp 'FAQ A|sample|fake data|LEGACY_TEXT'
+  )) +
+  (select count(*) from sop_knowledge where tenant_id=1 and (
+    title regexp 'sample|fake data|LEGACY_TEXT'
+    or steps regexp 'sample|fake data|LEGACY_TEXT'
+  )) +
+  (select count(*) from ai_messages where tenant_id=1 and (
+    content regexp 'Please analyze inventory risk|Suggested: prioritize|sample|fake data|LEGACY_TEXT'
+  ));
+"@)
+  if ($placeholderCount -gt 0) { throw "placeholder demo data rows found: $placeholderCount" }
+  Write-Host "demo realism placeholder check passed"
+
   Write-Host "[data-quality] 3/5 key field empty check"
   $emptyKeyCount = [int](Query-Scalar @"
 select

@@ -40,6 +40,9 @@ try {
   if (Test-Path "backend/deploy/mysql/init/111-schema-v1.2-sprint4-agent-notification-report.sql") {
     Run-SqlFile "backend/deploy/mysql/init/111-schema-v1.2-sprint4-agent-notification-report.sql"
   }
+  if (Test-Path "backend/deploy/mysql/init/112-seed-v1.4-demo-data-realism.sql") {
+    Run-SqlFile "backend/deploy/mysql/init/112-seed-v1.4-demo-data-realism.sql"
+  }
   Write-Host "[reset-commercial] done. Next: ./scripts/ops/release-checklist.ps1"
 } catch {
   Write-Error "[reset-commercial] failed: $($_.Exception.Message)"
