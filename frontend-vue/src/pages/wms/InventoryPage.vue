@@ -8,6 +8,7 @@
           <p class="nd-page-subtitle">库存、低库存预警、CSV 导入与流水历史。</p>
         </div>
         <input ref="importInput" class="hidden" type="file" accept=".csv,text/csv" @change="onImportFile" />
+        <n-button v-if="authStore.hasPermission('INVENTORY_EXPORT')" class="nd-soft-focus" :loading="exporting" @click="downloadInventoryCsv">CSV导出</n-button>
         <n-button v-if="authStore.hasPermission('INVENTORY_TEMPLATE_EXPORT')" class="nd-soft-focus" @click="downloadTemplate">CSV模板</n-button>
         <n-button v-if="authStore.hasPermission('INVENTORY_IMPORT')" class="nd-soft-focus" @click="importInput?.click()">CSV导入</n-button>
         <n-button class="nd-soft-focus" :loading="loading" @click="loadData">刷新</n-button>
@@ -140,6 +141,7 @@ const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 const loading = ref(false);
+const exporting = ref(false);
 const smartLoading = ref("");
 const errorText = ref("");
 const lastSuccessText = ref("");
@@ -224,6 +226,22 @@ async function downloadTemplate() {
     downloadText("inventory-import-template.csv", await wmsApi.exportInventoryImportTemplate());
   } catch (error) {
     message.error(error instanceof Error ? error.message : "模板下载失败");
+  }
+}
+
+async function downloadInventoryCsv() {
+  exporting.value = true;
+  errorText.value = "";
+  lastSuccessText.value = "导出中，浏览器将开始下载。";
+  try {
+    await wmsApi.exportInventoryCsv();
+    lastSuccessText.value = "库存 CSV 已触发下载";
+    message.success(lastSuccessText.value);
+  } catch (error) {
+    errorText.value = error instanceof Error ? error.message : "库存导出失败";
+    message.error(errorText.value);
+  } finally {
+    exporting.value = false;
   }
 }
 

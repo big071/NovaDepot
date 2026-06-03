@@ -1,5 +1,16 @@
 # NovaDepot 文档索引
 
+## v1.4 Ops & Admin Readiness
+
+| 编号 | 文档 | 说明 |
+|---|---|---|
+| 114 | [v1.4 Ops & Admin Readiness Plan](114-v1.4-ops-admin-readiness-plan.md) | v1.4 严格范围、模块门禁、验证命令和非目标 |
+| 115 | [v1.4 Slow Query And Index Review](115-v1.4-slow-query-index-review.md) | v1.4 慢查询与索引建议，仅文档记录，不执行 DDL |
+
+| 116 | [v1.4 Release Notes](116-v1.4-release-notes.md) | v1.4 Ops & Admin Readiness release notes and explicit non-goals |
+| 117 | [v1.4 Delivery Notes](117-v1.4-delivery-notes.md) | v1.4 delivery scope, impact, compatibility, and rollback notes |
+| 118 | [v1.4 Acceptance Checklist](118-v1.4-acceptance-checklist.md) | v1.4 final gate, security, schema, and release acceptance checklist |
+
 ## v1.3 Code Quality & Stability
 
 | 编号 | 文档 | 说明 |

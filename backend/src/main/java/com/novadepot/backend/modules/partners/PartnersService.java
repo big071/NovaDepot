@@ -1,6 +1,8 @@
 package com.novadepot.backend.modules.partners;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.novadepot.backend.common.cache.ReferenceDataCacheService;
 import com.novadepot.backend.common.context.RequestContext;
 import com.novadepot.backend.common.enums.ErrorCode;
 import com.novadepot.backend.common.exception.BizException;
@@ -31,13 +33,16 @@ public class PartnersService {
     private final PartnerMapper partnerMapper;
     private final AuditLogRecordService auditLogRecordService;
     private final ImportErrorReportMapper importErrorReportMapper;
+    private final ReferenceDataCacheService cacheService;
 
     public PartnersService(PartnerMapper partnerMapper,
                            AuditLogRecordService auditLogRecordService,
-                           ImportErrorReportMapper importErrorReportMapper) {
+                           ImportErrorReportMapper importErrorReportMapper,
+                           ReferenceDataCacheService cacheService) {
         this.partnerMapper = partnerMapper;
         this.auditLogRecordService = auditLogRecordService;
         this.importErrorReportMapper = importErrorReportMapper;
+        this.cacheService = cacheService;
     }
 
     public List<PartnerEntity> list(String keyword, String partnerType) {
@@ -52,7 +57,9 @@ public class PartnersService {
         if (StringUtils.hasText(partnerType)) {
             wrapper.eq(PartnerEntity::getPartnerType, normalizeType(partnerType));
         }
-        return partnerMapper.selectList(wrapper.orderByDesc(PartnerEntity::getId));
+        String key = cachePrefix() + "list:keyword:" + cleanKey(keyword) + ":type:" + cleanKey(partnerType);
+        return cacheService.getList(key, new TypeReference<List<PartnerEntity>>() {
+        }, () -> partnerMapper.selectList(wrapper.orderByDesc(PartnerEntity::getId)));
     }
 
     public PartnerEntity detail(Long id) {
@@ -74,6 +81,7 @@ public class PartnersService {
         entity.setCreatedBy(RequestContext.userId());
         entity.setUpdatedBy(RequestContext.userId());
         partnerMapper.insert(entity);
+        evictCache();
         auditLogRecordService.record(MODULE, "CREATE", RESOURCE_TYPE, String.valueOf(entity.getId()),
                 entity.getPartnerCode(), null, snapshot(entity));
         return Map.of("id", String.valueOf(entity.getId()), "partnerCode", entity.getPartnerCode());
@@ -86,6 +94,7 @@ public class PartnersService {
         apply(entity, req);
         entity.setUpdatedBy(RequestContext.userId());
         partnerMapper.updateById(entity);
+        evictCache();
         auditLogRecordService.record(MODULE, "UPDATE", RESOURCE_TYPE, String.valueOf(entity.getId()),
                 entity.getPartnerCode(), before, snapshot(entity));
         return Map.of("id", String.valueOf(entity.getId()), "partnerCode", entity.getPartnerCode());
@@ -97,6 +106,7 @@ public class PartnersService {
         entity.setStatus(status);
         entity.setUpdatedBy(RequestContext.userId());
         partnerMapper.updateById(entity);
+        evictCache();
         auditLogRecordService.record(MODULE, status.equals("ACTIVE") ? "ENABLE" : "DISABLE", RESOURCE_TYPE,
                 String.valueOf(entity.getId()), entity.getPartnerCode(), before, snapshot(entity));
         return Map.of("id", String.valueOf(entity.getId()), "status", entity.getStatus());
@@ -195,6 +205,7 @@ public class PartnersService {
                 "{\"totalRows\":" + (lines.length - 1) + ",\"successRows\":" + successRows
                         + ",\"failedRows\":" + errors.size() + ",\"skippedRows\":" + skippedRows
                         + ",\"reportId\":\"" + safe(reportId) + "\"}");
+        evictCache();
         Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("reportId", reportId);
         summary.put("totalRows", lines.length - 1);
@@ -304,5 +315,17 @@ public class PartnersService {
 
     private String safe(String value) {
         return value == null ? "" : value.replace("\\", "\\\\").replace("\"", "'");
+    }
+
+    private String cachePrefix() {
+        return "novadepot:ref:tenant:" + RequestContext.tenantId() + ":partners:";
+    }
+
+    private String cleanKey(String value) {
+        return value == null || value.isBlank() ? "all" : value.trim().replaceAll("[^A-Za-z0-9_-]", "_");
+    }
+
+    private void evictCache() {
+        cacheService.evictPrefix(cachePrefix());
     }
 }

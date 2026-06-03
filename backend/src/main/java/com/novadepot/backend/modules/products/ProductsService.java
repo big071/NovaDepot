@@ -1,6 +1,8 @@
 package com.novadepot.backend.modules.products;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.novadepot.backend.common.cache.ReferenceDataCacheService;
 import com.novadepot.backend.common.context.RequestContext;
 import com.novadepot.backend.common.enums.ErrorCode;
 import com.novadepot.backend.common.exception.BizException;
@@ -27,19 +29,23 @@ public class ProductsService {
     private final ProductMapper productMapper;
     private final ImportErrorReportMapper importErrorReportMapper;
     private final AuditLogRecordService auditLogRecordService;
+    private final ReferenceDataCacheService cacheService;
 
     public ProductsService(ProductMapper productMapper,
                            ImportErrorReportMapper importErrorReportMapper,
-                           AuditLogRecordService auditLogRecordService) {
+                           AuditLogRecordService auditLogRecordService,
+                           ReferenceDataCacheService cacheService) {
         this.productMapper = productMapper;
         this.importErrorReportMapper = importErrorReportMapper;
         this.auditLogRecordService = auditLogRecordService;
+        this.cacheService = cacheService;
     }
 
     public List<ProductEntity> list() {
-        return productMapper.selectList(new LambdaQueryWrapper<ProductEntity>()
+        return cacheService.getList(cachePrefix() + "list", new TypeReference<List<ProductEntity>>() {
+        }, () -> productMapper.selectList(new LambdaQueryWrapper<ProductEntity>()
                 .eq(ProductEntity::getTenantId, RequestContext.tenantId())
-                .orderByDesc(ProductEntity::getId));
+                .orderByDesc(ProductEntity::getId)));
     }
 
     public ProductEntity detail(Long id) {
@@ -66,6 +72,7 @@ public class ProductsService {
         entity.setStatus("ACTIVE");
         entity.setBatchEnabled(0);
         productMapper.insert(entity);
+        evictCache();
         auditLogRecordService.record("PRODUCT", "CREATE", "PRODUCT", String.valueOf(entity.getId()),
                 entity.getProductCode(), null, "{\"status\":\"ACTIVE\"}");
         return Map.of("id", entity.getId(), "productCode", entity.getProductCode());
@@ -84,6 +91,7 @@ public class ProductsService {
         existed.setUnitId(req.getUnitId());
         existed.setBarcode(req.getBarcode());
         productMapper.updateById(existed);
+        evictCache();
         auditLogRecordService.record("PRODUCT", "UPDATE", "PRODUCT", String.valueOf(existed.getId()),
                 existed.getProductCode(), before, snapshot(existed));
         return Map.of("id", existed.getId(), "productCode", existed.getProductCode());
@@ -126,6 +134,7 @@ public class ProductsService {
     public Map<String, Object> importCsv(String csvContent) {
         CsvImportResult result = parseProductCsv(csvContent);
         String reportId = saveReportIfNeeded("PRODUCT_IMPORT", result.reportCsv, result.errors);
+        evictCache();
         auditLogRecordService.record("IMPORT", "PRODUCT_IMPORT", "PRODUCT", null, null, null,
                 "{\"totalRows\":" + result.totalRows
                         + ",\"successRows\":" + result.successRows
@@ -253,6 +262,14 @@ public class ProductsService {
 
     private String safe(String value) {
         return value == null ? "" : value.replace("\"", "'");
+    }
+
+    private String cachePrefix() {
+        return "novadepot:ref:tenant:" + RequestContext.tenantId() + ":products:";
+    }
+
+    private void evictCache() {
+        cacheService.evictPrefix(cachePrefix());
     }
 
     private String value(Object obj) {

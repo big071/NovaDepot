@@ -1,4 +1,4 @@
-import { api } from "@/services/api";
+import { API_BASE_URL, api, getToken } from "@/services/api";
 
 interface QueryOptions {
   force?: boolean;
@@ -301,6 +301,7 @@ export const wmsApi = {
   exportInventoryImportTemplate: () => fetchRaw("/inventory/import/template"),
   getInventoryImportErrorReport: (reportId: string) => fetchRaw(`/inventory/import/errors/${reportId}`),
   importInventory: (csvContent: string) => api.post<ImportSummary>("/inventory/import", csvContent),
+  exportInventoryCsv: () => downloadCsv("/inventory/export", "inventory.csv"),
   inventoryExportFields: () => api.get<string[]>("/inventory/export/fields"),
 
   listStocktakes: (query?: { status?: string }) => api.get<StocktakeOrder[]>("/stocktakes", query),
@@ -451,13 +452,29 @@ export const wmsApi = {
 };
 
 async function fetchRaw(path: string) {
-  const base = import.meta.env.VITE_API_BASE_URL ?? "/api/v1";
-  const token = localStorage.getItem("novadepot-token") ?? "";
-  const res = await fetch(`${base}${path}`, {
-    headers: { Authorization: `Bearer ${token}` }
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    headers: { Authorization: `Bearer ${getToken()}` }
   });
   if (!res.ok) {
     throw new Error(`Download failed: ${res.status}`);
   }
   return res.text();
+}
+
+async function downloadCsv(path: string, fileName: string) {
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    headers: { Authorization: `Bearer ${getToken()}` }
+  });
+  if (!res.ok) {
+    throw new Error(`Download failed: ${res.status}`);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }

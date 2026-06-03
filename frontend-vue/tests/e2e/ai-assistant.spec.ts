@@ -19,10 +19,11 @@ test("AI 会话发送并展示历史消息", async ({ page }) => {
   await page.getByRole("button", { name: "发送" }).click();
 
   await expect(page.getByText(/消息发送成功|DeepSeek 调用失败/).first()).toBeVisible();
-  await expect(page.getByText(content)).toBeVisible();
+  const userMessage = page.locator("p").filter({ hasText: content }).first();
+  await expect(userMessage).toBeVisible();
 
   await page.reload();
-  await expect(page.getByText(content)).toBeVisible();
+  await expect(page.locator("p").filter({ hasText: content }).first()).toBeVisible();
 });
 
 test("AI 工具调用过程可视化", async ({ page }) => {

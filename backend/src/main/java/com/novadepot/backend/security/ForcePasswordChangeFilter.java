@@ -22,7 +22,8 @@ public class ForcePasswordChangeFilter extends OncePerRequestFilter {
             "/api/v1/auth/login",
             "/api/v1/auth/logout",
             "/api/v1/auth/change-password",
-            "/api/v1/auth/me"
+            "/api/v1/auth/me",
+            "/api/v1/health"
     );
 
     private final AuthQueryMapper authQueryMapper;

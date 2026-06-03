@@ -2,7 +2,7 @@
 
 NovaDepot is a smart warehouse management system, lightweight ERP, AI assistant, Agent patrol, and customer-service platform.
 
-Current release line: **v1.3 Code Quality & Stability** on `develop/v1.3`, preserving the v1.2.1 AI Experience Hotfix behavior.
+Current release line: **v1.4 Ops & Admin Readiness** on `develop/v1.4`, preserving the v1.3 quality baseline and the v1.2.1 AI Experience Hotfix behavior.
 
 ## Core Capabilities
 
@@ -15,7 +15,7 @@ Current release line: **v1.3 Code Quality & Stability** on `develop/v1.3`, prese
 - Reports: inventory turnover, inbound/outbound summary, purchase/sales summary, ticket efficiency, and CSV export.
 - Audit: audit center, tool-call logs, export logs, and configurable audit-log cleanup.
 
-The system is still a single-tenant local Docker architecture with `tenant_id` fields reserved for future work. Multi-tenant runtime, billing, RAG, vector database, knowledge graph, external notification channels, and AI write actions are not included in v1.3.
+The system is still a single-tenant local Docker architecture with `tenant_id` fields reserved for future work. Multi-tenant runtime, billing, RAG, vector database, knowledge graph, external notification channels, and AI write actions are not included in v1.4.
 
 ## Tech Stack
 
@@ -114,22 +114,23 @@ cd backend
 mvn test
 ```
 
-## v1.3 Scope Boundaries
+## v1.4 Scope Boundaries
 
 - No external notification channels: email, SMS, enterprise chat, or mobile push.
 - No AI automatic document creation, approval, inventory modification, or customer-message sending.
 - No custom report designer or BI real-time dashboard.
 - No RAG, vector database, knowledge graph, model training/fine-tuning, multi-tenant runtime, billing, or v2.0 features.
 - v1.1 WMS/ERP/CS/RBAC business flows remain preserved.
-- v1.2 DeepSeek Intelligence Core and v1.2.1 AI Experience Hotfix behavior remain preserved.
+- v1.2 DeepSeek Intelligence Core, v1.2.1 AI Experience Hotfix, and v1.3 quality baseline behavior remain preserved.
+- v1.4 adds ops/admin readiness only: role management completion, stable reference-data Redis cache, CSV streaming export, lightweight healthcheck, and E2E coverage.
 
 ## Documentation
 
 Start with [docs/README.md](docs/README.md).
 
-Key v1.3 documents:
+Key v1.4 documents:
 
-- [v1.3 Release Notes](docs/111-v1.3-release-notes.md)
-- [v1.3 Delivery Notes](docs/112-v1.3-delivery-notes.md)
-- [v1.3 Acceptance Checklist](docs/113-v1.3-acceptance-checklist.md)
-- [v1.3 Final Quality Cleanup Plan](docs/110-v1.3-final-quality-cleanup-plan.md)
+- [v1.4 Release Notes](docs/116-v1.4-release-notes.md)
+- [v1.4 Delivery Notes](docs/117-v1.4-delivery-notes.md)
+- [v1.4 Acceptance Checklist](docs/118-v1.4-acceptance-checklist.md)
+- [v1.4 Ops & Admin Readiness Plan](docs/114-v1.4-ops-admin-readiness-plan.md)

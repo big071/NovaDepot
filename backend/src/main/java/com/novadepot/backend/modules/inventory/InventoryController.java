@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import java.util.List;
 
@@ -44,11 +45,12 @@ public class InventoryController {
 
     @GetMapping(value = "/export", produces = "text/csv;charset=UTF-8")
     @RequirePermission("INVENTORY_EXPORT")
-    public ResponseEntity<String> exportCsv() {
+    public ResponseEntity<StreamingResponseBody> exportCsv() {
+        StreamingResponseBody body = outputStream -> service.writeExportCsv(outputStream);
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType("text/csv;charset=UTF-8"))
                 .header("Content-Disposition", "attachment; filename=inventory.csv")
-                .body(service.exportCsv());
+                .body(body);
     }
 
     @GetMapping(value = "/import/template", produces = "text/csv;charset=UTF-8")
