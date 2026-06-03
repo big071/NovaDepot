@@ -10,6 +10,7 @@
 | 116 | [v1.4 Release Notes](116-v1.4-release-notes.md) | v1.4 Ops & Admin Readiness release notes and explicit non-goals |
 | 117 | [v1.4 Delivery Notes](117-v1.4-delivery-notes.md) | v1.4 delivery scope, impact, compatibility, and rollback notes |
 | 118 | [v1.4 Acceptance Checklist](118-v1.4-acceptance-checklist.md) | v1.4 final gate, security, schema, and release acceptance checklist |
+| 119 | [v1.4 Backlog Completion](119-v1.4-backlog-completion.md) | one-time v1.4 backlog completion scan, low-risk hardening, and validation record |
 
 ## v1.3 Code Quality & Stability
 

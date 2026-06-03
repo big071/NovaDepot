@@ -1,6 +1,8 @@
 package com.novadepot.backend.modules.ai.tools;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novadepot.backend.common.context.RequestContext;
@@ -136,9 +138,8 @@ public class AiToolExecutor {
                 .eq(readLong(args.get("warehouseId")) != null, InventoryEntity::getWarehouseId, readLong(args.get("warehouseId")))
                 .in(!productIds.isEmpty(), InventoryEntity::getProductId, productIds)
                 .le(Boolean.TRUE.equals(readBoolean(args.get("lowStock"))), InventoryEntity::getAvailableQty, BigDecimal.TEN)
-                .orderByAsc(InventoryEntity::getAvailableQty)
-                .last("limit " + limit);
-        List<Map<String, Object>> rows = inventoryMapper.selectList(q).stream().map(row -> {
+                .orderByAsc(InventoryEntity::getAvailableQty);
+        List<Map<String, Object>> rows = selectLimited(inventoryMapper, q, limit).stream().map(row -> {
             ProductEntity p = productMapper.selectById(row.getProductId());
             WarehouseEntity w = warehouseMapper.selectById(row.getWarehouseId());
             return map("sourceType", "inventory", "sourceId", row.getId(), "productName", p == null ? row.getProductId() : p.getProductName(),
@@ -155,9 +156,8 @@ public class AiToolExecutor {
                 .like(text(args, "sourceNo") != null, InboundOrderEntity::getSourceOrderNo, text(args, "sourceNo"))
                 .ge(dateStart(args, "dateFrom") != null, InboundOrderEntity::getCreatedAt, dateStart(args, "dateFrom"))
                 .lt(dateEnd(args, "dateTo") != null, InboundOrderEntity::getCreatedAt, dateEnd(args, "dateTo"))
-                .orderByDesc(InboundOrderEntity::getCreatedAt)
-                .last("limit " + limit(args));
-        List<Map<String, Object>> rows = inboundOrderMapper.selectList(q).stream()
+                .orderByDesc(InboundOrderEntity::getCreatedAt);
+        List<Map<String, Object>> rows = selectLimited(inboundOrderMapper, q, limit(args)).stream()
                 .map(r -> map("sourceType", "inbound", "sourceId", r.getId(), "bizNo", r.getInboundNo(), "status", r.getStatus(),
                         "sourceNo", r.getSourceOrderNo(), "warehouseId", r.getWarehouseId(), "createdAt", r.getCreatedAt()))
                 .toList();
@@ -171,9 +171,8 @@ public class AiToolExecutor {
                 .like(text(args, "sourceNo") != null, OutboundOrderEntity::getSourceOrderNo, text(args, "sourceNo"))
                 .ge(dateStart(args, "dateFrom") != null, OutboundOrderEntity::getCreatedAt, dateStart(args, "dateFrom"))
                 .lt(dateEnd(args, "dateTo") != null, OutboundOrderEntity::getCreatedAt, dateEnd(args, "dateTo"))
-                .orderByDesc(OutboundOrderEntity::getCreatedAt)
-                .last("limit " + limit(args));
-        List<Map<String, Object>> rows = outboundOrderMapper.selectList(q).stream()
+                .orderByDesc(OutboundOrderEntity::getCreatedAt);
+        List<Map<String, Object>> rows = selectLimited(outboundOrderMapper, q, limit(args)).stream()
                 .map(r -> map("sourceType", "outbound", "sourceId", r.getId(), "bizNo", r.getOutboundNo(), "status", r.getStatus(),
                         "sourceNo", r.getSourceOrderNo(), "warehouseId", r.getWarehouseId(), "createdAt", r.getCreatedAt()))
                 .toList();
@@ -188,9 +187,8 @@ public class AiToolExecutor {
                 .in(partnerIds(args.get("partnerName")).size() > 0, PurchaseOrderEntity::getPartnerId, partnerIds(args.get("partnerName")))
                 .ge(dateStart(args, "dateFrom") != null, PurchaseOrderEntity::getCreatedAt, dateStart(args, "dateFrom"))
                 .lt(dateEnd(args, "dateTo") != null, PurchaseOrderEntity::getCreatedAt, dateEnd(args, "dateTo"))
-                .orderByDesc(PurchaseOrderEntity::getCreatedAt)
-                .last("limit " + limit(args));
-        List<Map<String, Object>> rows = purchaseOrderMapper.selectList(q).stream()
+                .orderByDesc(PurchaseOrderEntity::getCreatedAt);
+        List<Map<String, Object>> rows = selectLimited(purchaseOrderMapper, q, limit(args)).stream()
                 .map(r -> map("sourceType", "purchase", "sourceId", r.getId(), "bizNo", r.getPurchaseNo(), "status", r.getStatus(),
                         "totalAmount", r.getTotalAmount(), "expectedArrivalDate", r.getExpectedArrivalDate(), "createdAt", r.getCreatedAt()))
                 .toList();
@@ -205,9 +203,8 @@ public class AiToolExecutor {
                 .in(partnerIds(args.get("partnerName")).size() > 0, SalesOrderEntity::getPartnerId, partnerIds(args.get("partnerName")))
                 .ge(dateStart(args, "dateFrom") != null, SalesOrderEntity::getCreatedAt, dateStart(args, "dateFrom"))
                 .lt(dateEnd(args, "dateTo") != null, SalesOrderEntity::getCreatedAt, dateEnd(args, "dateTo"))
-                .orderByDesc(SalesOrderEntity::getCreatedAt)
-                .last("limit " + limit(args));
-        List<Map<String, Object>> rows = salesOrderMapper.selectList(q).stream()
+                .orderByDesc(SalesOrderEntity::getCreatedAt);
+        List<Map<String, Object>> rows = selectLimited(salesOrderMapper, q, limit(args)).stream()
                 .map(r -> map("sourceType", "sale", "sourceId", r.getId(), "bizNo", r.getSalesNo(), "status", r.getStatus(),
                         "totalAmount", r.getTotalAmount(), "deliveryDate", r.getDeliveryDate(), "createdAt", r.getCreatedAt()))
                 .toList();
@@ -221,9 +218,8 @@ public class AiToolExecutor {
                 .like(text(args, "keyword") != null, CustomerServiceTicketEntity::getContent, text(args, "keyword"))
                 .ge(dateStart(args, "dateFrom") != null, CustomerServiceTicketEntity::getCreatedAt, dateStart(args, "dateFrom"))
                 .lt(dateEnd(args, "dateTo") != null, CustomerServiceTicketEntity::getCreatedAt, dateEnd(args, "dateTo"))
-                .orderByDesc(CustomerServiceTicketEntity::getCreatedAt)
-                .last("limit " + limit(args));
-        List<Map<String, Object>> rows = ticketMapper.selectList(q).stream()
+                .orderByDesc(CustomerServiceTicketEntity::getCreatedAt);
+        List<Map<String, Object>> rows = selectLimited(ticketMapper, q, limit(args)).stream()
                 .map(r -> map("sourceType", "ticket", "sourceId", r.getId(), "bizNo", r.getTicketNo(), "status", r.getStatus(),
                         "priority", r.getPriority(), "content", truncate(r.getContent(), 80), "createdAt", r.getCreatedAt()))
                 .toList();
@@ -236,9 +232,8 @@ public class AiToolExecutor {
                 .like(text(args, "name") != null, ProductEntity::getProductName, text(args, "name"))
                 .like(text(args, "sku") != null, ProductEntity::getProductCode, text(args, "sku"))
                 .eq(readBoolean(args.get("enabled")) != null, ProductEntity::getStatus, Boolean.TRUE.equals(readBoolean(args.get("enabled"))) ? "ACTIVE" : "INACTIVE")
-                .orderByDesc(ProductEntity::getCreatedAt)
-                .last("limit " + limit(args));
-        List<Map<String, Object>> rows = productMapper.selectList(q).stream()
+                .orderByDesc(ProductEntity::getCreatedAt);
+        List<Map<String, Object>> rows = selectLimited(productMapper, q, limit(args)).stream()
                 .map(r -> map("sourceType", "product", "sourceId", r.getId(), "bizNo", r.getProductCode(), "name", r.getProductName(),
                         "status", r.getStatus(), "spec", r.getSpec()))
                 .toList();
@@ -251,9 +246,8 @@ public class AiToolExecutor {
                 .like(text(args, "name") != null, PartnerEntity::getPartnerName, text(args, "name"))
                 .eq(text(args, "type") != null, PartnerEntity::getPartnerType, text(args, "type"))
                 .eq(readBoolean(args.get("enabled")) != null, PartnerEntity::getStatus, Boolean.TRUE.equals(readBoolean(args.get("enabled"))) ? "ACTIVE" : "INACTIVE")
-                .orderByDesc(PartnerEntity::getCreatedAt)
-                .last("limit " + limit(args));
-        List<Map<String, Object>> rows = partnerMapper.selectList(q).stream()
+                .orderByDesc(PartnerEntity::getCreatedAt);
+        List<Map<String, Object>> rows = selectLimited(partnerMapper, q, limit(args)).stream()
                 .map(r -> map("sourceType", "partner", "sourceId", r.getId(), "bizNo", r.getPartnerCode(), "name", r.getPartnerName(),
                         "type", r.getPartnerType(), "status", r.getStatus(), "contactName", r.getContactName()))
                 .toList();
@@ -307,19 +301,17 @@ public class AiToolExecutor {
         LambdaQueryWrapper<ProductEntity> q = new LambdaQueryWrapper<ProductEntity>()
                 .eq(ProductEntity::getTenantId, RequestContext.tenantId())
                 .like(textValue(productName) != null, ProductEntity::getProductName, textValue(productName))
-                .like(textValue(sku) != null, ProductEntity::getProductCode, textValue(sku))
-                .last("limit 20");
+                .like(textValue(sku) != null, ProductEntity::getProductCode, textValue(sku));
         if (textValue(productName) == null && textValue(sku) == null) return List.of();
-        return productMapper.selectList(q).stream().map(ProductEntity::getId).toList();
+        return selectLimited(productMapper, q, 20).stream().map(ProductEntity::getId).toList();
     }
 
     private List<Long> partnerIds(Object name) {
         String text = textValue(name);
         if (text == null) return List.of();
-        return partnerMapper.selectList(new LambdaQueryWrapper<PartnerEntity>()
+        return selectLimited(partnerMapper, new LambdaQueryWrapper<PartnerEntity>()
                 .eq(PartnerEntity::getTenantId, RequestContext.tenantId())
-                .like(PartnerEntity::getPartnerName, text)
-                .last("limit 20")).stream().map(PartnerEntity::getId).toList();
+                .like(PartnerEntity::getPartnerName, text), 20).stream().map(PartnerEntity::getId).toList();
     }
 
     private Map<String, Object> parseArgs(String json) {
@@ -335,6 +327,10 @@ public class AiToolExecutor {
         Object raw = args.get("limit");
         int value = raw instanceof Number n ? n.intValue() : 10;
         return Math.max(1, Math.min(value, 20));
+    }
+
+    private <T> List<T> selectLimited(BaseMapper<T> mapper, LambdaQueryWrapper<T> query, int limit) {
+        return mapper.selectPage(new Page<>(1, limit, false), query).getRecords();
     }
 
     private String text(Map<String, Object> args, String key) { return textValue(args.get(key)); }
