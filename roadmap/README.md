@@ -4,6 +4,14 @@
 
 ---
 
+## v1.4 Release Status
+
+NovaDepot v1.4 Ops & Admin Readiness is the final ops/admin readiness release before v2.0 planning. It is not v2.0 and does not enable multi-tenant runtime, billing, RAG, vector database, or multimodal AI.
+
+v1.4 scope is limited to role management completion, stable reference-data Redis caching, slow-query index advice documentation, CSV streaming export, lightweight healthcheck, E2E expansion, and residual cleanup.
+
+---
+
 ## 总览
 
 ```text
