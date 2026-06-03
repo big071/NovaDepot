@@ -60,7 +60,7 @@ class CsvImportPerformanceTest {
     void productImport_preloadsExistingCodesOnceAndPreservesDuplicateSummary() {
         ProductMapper productMapper = mock(ProductMapper.class);
         ProductsService service = new ProductsService(productMapper, importErrorReportMapper, auditLogRecordService, cacheService);
-        ProductEntity existed = product(1L, "SKU-DEMO-001");
+        ProductEntity existed = product(1L, "SKU-OFF-A4-CSV");
         when(productMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(List.of(existed));
 
         Map<String, Object> summary = service.importCsv(service.importTemplateCsv());
@@ -80,7 +80,7 @@ class CsvImportPerformanceTest {
         PartnersService service = new PartnersService(partnerMapper, auditLogRecordService, importErrorReportMapper, cacheService);
         var existed = new com.novadepot.backend.model.entity.PartnerEntity();
         existed.setId(1L);
-        existed.setPartnerCode("P-DEMO-001");
+        existed.setPartnerCode("PT-SUP-GZ-MG-CSV");
         when(partnerMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(List.of(existed));
 
         Map<String, Object> summary = service.importCsv(service.importTemplateCsv());
@@ -110,9 +110,9 @@ class CsvImportPerformanceTest {
                 locationMapper,
                 productMapper
         );
-        WarehouseEntity warehouse = warehouse(10L, "WH-SH-01");
-        WarehouseLocationEntity location = location(20L, warehouse.getId(), "A-01-01");
-        ProductEntity product = product(30L, "SKU-DEMO-001");
+        WarehouseEntity warehouse = warehouse(10L, "WH-GZ-CENTER");
+        WarehouseLocationEntity location = location(20L, warehouse.getId(), "A区-01-01");
+        ProductEntity product = product(30L, "SKU-OFF-A4-001");
         InventoryEntity existed = inventory(40L, warehouse.getId(), location.getId(), product.getId(), BigDecimal.ONE);
         when(warehouseMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(List.of(warehouse));
         when(locationMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(List.of(location));

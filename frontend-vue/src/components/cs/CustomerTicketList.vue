@@ -10,21 +10,21 @@
           <p class="font-medium">{{ ticket.ticketNo }}</p>
           <n-tag :bordered="false" type="info">{{ ticket.status }}</n-tag>
         </div>
-        <p class="mt-1 text-text-secondary">璐ｄ换浜猴細{{ ticket.assigneeUserId || "-" }}</p>
-        <p class="mt-1 text-text-secondary">AI鑷姩鍥炲锛歿{ ticket.aiAutoReplied ? "鏄? : "鍚? }} / 浜哄伐鎺ョ锛歿{ ticket.humanTakenOver ? "鏄? : "鍚? }}</p>
-        <p class="mt-1 text-text-secondary">涓嬩竴姝ュ缓璁細{{ ticket.nextSuggestion || "-" }}</p>
+        <p class="mt-1 text-text-secondary">负责人：{{ ticket.assigneeUserId || "-" }}</p>
+        <p class="mt-1 text-text-secondary">AI 自动回复：{{ ticket.aiAutoReplied ? "是" : "否" }} / 人工接管：{{ ticket.humanTakenOver ? "是" : "否" }}</p>
+        <p class="mt-1 text-text-secondary">下一步建议：{{ ticket.nextSuggestion || "-" }}</p>
         <div class="mt-2 grid gap-2 md:grid-cols-3">
           <n-select :value="ticketStatusDraft[ticket.ticketId]" :options="statusOptions" @update:value="(value) => $emit('update-status-draft', ticket.ticketId, value)" />
-          <n-input :value="ticketOwnerDraft[ticket.ticketId]" placeholder="璐熻矗浜篒D" @update:value="(value) => $emit('update-owner-draft', ticket.ticketId, value)" />
-          <n-input :value="ticketRemarkDraft[ticket.ticketId]" placeholder="澶勭悊澶囨敞/鍏抽棴鍘熷洜" @update:value="(value) => $emit('update-remark-draft', ticket.ticketId, value)" />
+          <n-input :value="ticketOwnerDraft[ticket.ticketId]" placeholder="负责人 ID" @update:value="(value) => $emit('update-owner-draft', ticket.ticketId, value)" />
+          <n-input :value="ticketRemarkDraft[ticket.ticketId]" placeholder="处理备注/关闭原因" @update:value="(value) => $emit('update-remark-draft', ticket.ticketId, value)" />
         </div>
         <div class="mt-2 flex flex-wrap gap-2">
           <n-button size="small" @click="$emit('update-ticket-status', ticket)">保存状态</n-button>
           <n-button size="small" @click="$emit('update-ticket-owner', ticket)">保存负责人</n-button>
           <n-button size="small" @click="$emit('update-ticket-remark', ticket)">保存备注</n-button>
           <n-button size="small" type="primary" @click="$emit('open-timeline', ticket.ticketId)">查看处理历史</n-button>
-          <n-button size="small" @click="$emit('draft-faq', ticket)">沉淀FAQ草稿</n-button>
-          <n-button size="small" @click="$emit('draft-sop', ticket)">沉淀SOP草稿</n-button>
+          <n-button size="small" @click="$emit('draft-faq', ticket)">沉淀 FAQ 草稿</n-button>
+          <n-button size="small" @click="$emit('draft-sop', ticket)">沉淀 SOP 草稿</n-button>
         </div>
       </article>
       <n-pagination :page="ticketPageNo" :page-size="ticketPageSize" :item-count="ticketTotal" @update:page="(page) => $emit('ticket-page-change', page)" />

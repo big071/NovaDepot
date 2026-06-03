@@ -108,14 +108,14 @@ public class InventoryService {
 
     public String importTemplateCsv() {
         return "仓库编码,库位编码,商品编码,可用数量,批次号,备注\n"
-                + "WH-SH-01,A-01-01,SKU-DEMO-001,10,BATCH-202605,示例库存导入";
+                + "WH-GZ-CENTER,A区-01-01,SKU-OFF-A4-001,10,BATCH-202606,广州中心仓办公耗材补货";
     }
 
     public List<String> exportFieldDescriptions() {
         return List.of(
-                "仓库编码: 已存在仓库编码",
-                "库位编码: 已存在库位编码",
-                "商品编码: 已存在商品编码",
+                "仓库编码: 已存在的仓库编码",
+                "库位编码: 已存在的库位编码",
+                "商品编码: 已存在的商品编码",
                 "可用数量: 非负数字，不带千分位",
                 "批次号: 可选",
                 "备注: 可选"
@@ -158,7 +158,7 @@ public class InventoryService {
             if (line == null || line.trim().isBlank()) continue;
             String[] cols = line.split(",", -1);
             if (cols.length < 4) {
-                result.addError(i + 1, "整行", "列数量不足", line);
+                result.addError(i + 1, "整行", "列数不足", line);
                 continue;
             }
             WarehouseEntity warehouse = importContext.warehousesByCode().get(unquote(cols[0]));
@@ -170,7 +170,7 @@ public class InventoryService {
                 continue;
             }
             if (location == null || !warehouse.getId().equals(location.getWarehouseId())) {
-                result.addError(i + 1, "库位编码", "库位不存在或不属于仓库", cols[1]);
+                result.addError(i + 1, "库位编码", "库位不存在或不属于该仓库", cols[1]);
                 continue;
             }
             if (product == null) {

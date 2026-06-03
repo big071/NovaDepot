@@ -1,23 +1,23 @@
 <template>
   <article class="nd-table-shell">
     <div class="nd-table-head">
-      <h3 class="nd-section-title">娑堟伅涓嶢I寤鸿</h3>
+      <h3 class="nd-section-title">消息与 AI 建议</h3>
     </div>
     <div class="nd-table-body space-y-3">
       <div class="flex flex-wrap gap-2">
-        <n-button class="nd-soft-focus" :disabled="!activeSessionId" :loading="loadingSuggestion" @click="$emit('load-suggestion')">鑾峰彇AI寤鸿</n-button>
-        <n-button class="nd-soft-focus" :disabled="!activeSessionId || !suggestionFirst" @click="$emit('use-suggestion')">濂楃敤棣栨潯寤鸿</n-button>
-        <n-button class="nd-soft-focus" :disabled="!activeSessionId" @click="$emit('transfer-human')">浜哄伐鎺ョ</n-button>
+        <n-button class="nd-soft-focus" :disabled="!activeSessionId" :loading="loadingSuggestion" @click="$emit('load-suggestion')">获取 AI 建议</n-button>
+        <n-button class="nd-soft-focus" :disabled="!activeSessionId || !suggestionFirst" @click="$emit('use-suggestion')">套用首条建议</n-button>
+        <n-button class="nd-soft-focus" :disabled="!activeSessionId" @click="$emit('transfer-human')">人工接管</n-button>
         <n-button class="nd-soft-focus" :disabled="!activeSessionId" @click="$emit('toggle-auto-reply')">
-          鑷姩鍥炲锛歿{ autoReplyEnabled ? "寮€鍚? : "鍏抽棴" }}
+          自动回复：{{ autoReplyEnabled ? "开启" : "关闭" }}
         </n-button>
       </div>
       <article class="rounded-xl border border-border bg-bg/60 p-3 text-sm">
-        <p class="font-medium">AI建议依据</p>
+        <p class="font-medium">AI 建议依据</p>
         <p class="mt-1 text-text-secondary">{{ (aiSuggestion?.basis || []).join("；") || "-" }}</p>
         <p class="mt-2 font-medium">工单分类建议：{{ aiSuggestion?.ticketCategorySuggestion || "-" }}</p>
         <p class="mt-1">优先级建议：{{ aiSuggestion?.prioritySuggestion || "-" }}</p>
-        <p class="mt-1">SOP建议：{{ aiSuggestion?.sopSuggestion || "-" }}</p>
+        <p class="mt-1">SOP 建议：{{ aiSuggestion?.sopSuggestion || "-" }}</p>
         <p class="mt-2 font-medium">知识引用来源</p>
         <div v-if="(aiSuggestion?.knowledgeRefs || []).length" class="mt-2 flex flex-wrap gap-2">
           <n-tag v-for="ref in aiSuggestion?.knowledgeRefs || []" :key="`${ref.type}-${ref.code || ref.title}`" :bordered="false" type="info">
@@ -31,7 +31,7 @@
       </article>
       <div class="max-h-[260px] space-y-2 overflow-y-auto rounded-xl border border-border bg-bg/40 p-3">
         <article v-for="msg in messages" :key="msg.id" class="rounded-lg border border-border bg-surface p-2 text-sm">
-          <p class="text-xs text-text-secondary">{{ msg.sender }} 路 {{ msg.msgType }}</p>
+          <p class="text-xs text-text-secondary">{{ msg.sender }} / {{ msg.msgType }}</p>
           <p class="mt-1">{{ msg.content }}</p>
         </article>
       </div>

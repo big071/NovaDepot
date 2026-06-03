@@ -116,7 +116,7 @@ public class ProductsService {
 
     public String importTemplateCsv() {
         return "商品编码,商品名称,分类编码,单位编码,条码,规格,启用批次,保质期天数,状态\n"
-                + "SKU-DEMO-001,示例商品,CAT-FOOD,UNIT-PCS,690000000001,箱规 1*12,否,365,ACTIVE";
+                + "SKU-OFF-A4-CSV,得力 A4 复印纸 70g,CAT-OFF,UNIT-PCS,690000000101,500张/包;门店补货,否,365,ACTIVE";
     }
 
     public String importErrorReport(String reportId) {
@@ -157,7 +157,7 @@ public class ProductsService {
             if (line == null || line.trim().isBlank()) continue;
             String[] cols = line.split(",", -1);
             if (cols.length < 9) {
-                result.addError(i + 1, "整行", "列数量不足", line);
+                result.addError(i + 1, "整行", "列数不足", line);
                 continue;
             }
             String code = unquote(cols[0]);
@@ -297,8 +297,12 @@ public class ProductsService {
         if (value == null || value.isBlank()) return null;
         if (value.trim().matches("\\d+")) return parseLong(value);
         return switch (value.trim()) {
-            case "CAT-FOOD" -> 9001L;
-            case "CAT-HOUSE" -> 9002L;
+            case "CAT-OFF", "CAT-FOOD" -> 9001L;
+            case "CAT-IT", "CAT-HOUSE" -> 9002L;
+            case "CAT-CLEAN" -> 9003L;
+            case "CAT-PACK", "CAT-OFFICE" -> 9004L;
+            case "CAT-STORAGE" -> 9005L;
+            case "CAT-DAILY" -> 9006L;
             default -> null;
         };
     }

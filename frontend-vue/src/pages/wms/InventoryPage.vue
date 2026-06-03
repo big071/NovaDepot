@@ -190,19 +190,59 @@ const txnColumns: DataTableColumns<InventoryTransaction> = [
   { title: "时间", key: "occurredAt" }
 ];
 
-function resolveWarehouseName(warehouseId: string) {
-  const found = warehouseRows.value.find((item) => item.id === warehouseId);
-  return found ? `${found.warehouseCode} / ${found.warehouseName}` : warehouseId;
+type DisplayEntityId = string | number | null | undefined;
+
+function sameEntityId(left: DisplayEntityId, right: DisplayEntityId) {
+  const leftText = String(left ?? "");
+  const rightText = String(right ?? "");
+  if (leftText === rightText) return true;
+  if (!leftText || !rightText) return false;
+  const leftNumber = Number(leftText);
+  const rightNumber = Number(rightText);
+  return Number.isFinite(leftNumber) && Number.isFinite(rightNumber) && leftNumber === rightNumber;
 }
 
-function resolveLocationName(locationId: string) {
-  const found = locationRows.value.find((item) => item.id === locationId);
-  return found ? `${found.locationCode} / ${found.locationName}` : locationId;
+function fallbackId(id: DisplayEntityId) {
+  return id === null || id === undefined || String(id).trim() === "" ? "-" : String(id);
 }
 
-function resolveProductName(productId: string) {
-  const found = productRows.value.find((item) => item.id === productId);
-  return found ? `${found.productCode} / ${found.productName}` : productId;
+function resolveWarehouseName(warehouseId: DisplayEntityId) {
+  const found = warehouseRows.value.find((item) => sameEntityId(item.id, warehouseId));
+  return found ? `${found.warehouseCode} / ${found.warehouseName}` : fallbackId(warehouseId);
+}
+
+function resolveLocationName(locationId: DisplayEntityId) {
+  const found = locationRows.value.find((item) => sameEntityId(item.id, locationId));
+  return found ? `${found.locationCode} / ${found.locationName}` : fallbackId(locationId);
+}
+
+function resolveProductName(productId: DisplayEntityId) {
+  const found = productRows.value.find((item) => sameEntityId(item.id, productId));
+  return found ? `${found.productCode} / ${found.productName}` : fallbackId(productId);
+}
+
+function collectMissingProductIds(...groups: Array<Array<{ productId: string }>>) {
+  const knownIds = new Set(productRows.value.map((item) => String(item.id)));
+  const missingIds = new Set<string>();
+  groups.flat().forEach((item) => {
+    const productId = String(item.productId ?? "");
+    if (productId && !knownIds.has(productId)) {
+      missingIds.add(productId);
+    }
+  });
+  return Array.from(missingIds);
+}
+
+async function enrichMissingProducts(...groups: Array<Array<{ productId: string }>>) {
+  const missingIds = collectMissingProductIds(...groups);
+  if (missingIds.length === 0) return;
+  const loaded = await Promise.allSettled(missingIds.map((id) => wmsApi.getProductDetail(id)));
+  const extraProducts = loaded
+    .filter((item): item is PromiseFulfilledResult<Product> => item.status === "fulfilled" && Boolean(item.value?.id))
+    .map((item) => item.value);
+  if (extraProducts.length > 0) {
+    productRows.value = [...productRows.value, ...extraProducts];
+  }
 }
 
 function applyRouteHint() {
@@ -286,6 +326,7 @@ async function loadData() {
     warehouseRows.value = warehouses;
     productRows.value = products;
     locationRows.value = locations;
+    await enrichMissingProducts(inventory, alerts, transactions);
     lastSuccessText.value = `库存数据已刷新：${new Date().toLocaleString("zh-CN", { hour12: false })}`;
     applyRouteHint();
   } catch (error) {

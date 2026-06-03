@@ -114,7 +114,7 @@ public class PartnersService {
 
     public String importTemplateCsv() {
         return "单位编码,单位名称,单位类型,联系人,电话,地址,状态,备注\n"
-                + "P-DEMO-001,示例往来单位,SUPPLIER,张三,13800000000,上海市,ACTIVE,示例数据";
+                + "PT-SUP-GZ-MG-CSV,广州晨光文具有限公司,SUPPLIER,刘敏,13900010001,广州市白云区文具供应链园区 8 号,ACTIVE,办公耗材采购供应商";
     }
 
     public String importErrorReport(String reportId) {
@@ -145,7 +145,7 @@ public class PartnersService {
             if (line == null || line.trim().isBlank()) continue;
             String[] cols = line.split(",", -1);
             if (cols.length < 8) {
-                addImportError(errors, reportCsv, i + 1, "整行", "列数量不足", line);
+                addImportError(errors, reportCsv, i + 1, "整行", "列数不足", line);
                 continue;
             }
             String code = unquote(cols[0]);
