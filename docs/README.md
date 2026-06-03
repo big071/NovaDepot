@@ -1,5 +1,12 @@
 # NovaDepot 文档索引
 
+## v1.4 Ops & Admin Readiness
+
+| 编号 | 文档 | 说明 |
+|---|---|---|
+| 114 | [v1.4 Ops & Admin Readiness Plan](114-v1.4-ops-admin-readiness-plan.md) | v1.4 严格范围、模块门禁、验证命令和非目标 |
+| 115 | [v1.4 Slow Query And Index Review](115-v1.4-slow-query-index-review.md) | v1.4 慢查询与索引建议，仅文档记录，不执行 DDL |
+
 ## v1.3 Code Quality & Stability
 
 | 编号 | 文档 | 说明 |

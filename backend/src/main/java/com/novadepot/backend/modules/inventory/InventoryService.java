@@ -20,7 +20,11 @@ import com.novadepot.backend.repository.WarehouseMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -86,6 +90,20 @@ public class InventoryService {
         auditLogRecordService.record("INVENTORY", "EXPORT", "INVENTORY", null, null, null,
                 "{\"count\":" + rows.size() + "}");
         return csv.toString();
+    }
+
+    public void writeExportCsv(OutputStream outputStream) throws java.io.IOException {
+        List<InventoryEntity> rows = list();
+        try (Writer writer = new OutputStreamWriter(outputStream, StandardCharsets.UTF_8)) {
+            writer.write("warehouseId,locationId,productId,availableQty,lockedQty,inTransitQty\n");
+            for (InventoryEntity item : rows) {
+                writer.write(item.getWarehouseId() + "," + item.getLocationId() + "," + item.getProductId() + ","
+                        + item.getAvailableQty() + "," + item.getLockedQty() + "," + item.getInTransitQty() + "\n");
+            }
+            writer.flush();
+        }
+        auditLogRecordService.record("INVENTORY", "EXPORT", "INVENTORY", null, null, null,
+                "{\"count\":" + rows.size() + ",\"streaming\":true}");
     }
 
     public String importTemplateCsv() {

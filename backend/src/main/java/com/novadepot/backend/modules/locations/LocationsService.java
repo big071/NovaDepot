@@ -1,6 +1,8 @@
 package com.novadepot.backend.modules.locations;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.novadepot.backend.common.cache.ReferenceDataCacheService;
 import com.novadepot.backend.common.context.RequestContext;
 import com.novadepot.backend.common.enums.ErrorCode;
 import com.novadepot.backend.common.exception.BizException;
@@ -16,11 +18,14 @@ import java.util.Map;
 public class LocationsService {
     private final WarehouseLocationMapper locationMapper;
     private final AuditLogRecordService auditLogRecordService;
+    private final ReferenceDataCacheService cacheService;
 
     public LocationsService(WarehouseLocationMapper locationMapper,
-                            AuditLogRecordService auditLogRecordService) {
+                            AuditLogRecordService auditLogRecordService,
+                            ReferenceDataCacheService cacheService) {
         this.locationMapper = locationMapper;
         this.auditLogRecordService = auditLogRecordService;
+        this.cacheService = cacheService;
     }
 
     public List<WarehouseLocationEntity> list(Long warehouseId) {
@@ -30,7 +35,9 @@ public class LocationsService {
         if (warehouseId != null) {
             qw.eq(WarehouseLocationEntity::getWarehouseId, warehouseId);
         }
-        return locationMapper.selectList(qw);
+        String key = cachePrefix() + "list:warehouse:" + (warehouseId == null ? "all" : warehouseId);
+        return cacheService.getList(key, new TypeReference<List<WarehouseLocationEntity>>() {
+        }, () -> locationMapper.selectList(qw));
     }
 
     public WarehouseLocationEntity detail(Long id) {
@@ -56,6 +63,7 @@ public class LocationsService {
         entity.setCapacityQty(req.getCapacityQty());
         entity.setStatus("ACTIVE");
         locationMapper.insert(entity);
+        evictCache();
         auditLogRecordService.record("LOCATION", "CREATE", "LOCATION", String.valueOf(entity.getId()),
                 entity.getLocationCode(), null, "{\"locationName\":\"" + safe(entity.getLocationName()) + "\"}");
         return Map.of("id", entity.getId(), "locationCode", entity.getLocationCode());
@@ -74,6 +82,7 @@ public class LocationsService {
         entity.setLocationType(req.getLocationType() == null ? "NORMAL" : req.getLocationType());
         entity.setCapacityQty(req.getCapacityQty());
         locationMapper.updateById(entity);
+        evictCache();
         String after = "{\"locationName\":\"" + safe(entity.getLocationName()) + "\",\"capacityQty\":\"" + entity.getCapacityQty() + "\"}";
         auditLogRecordService.record("LOCATION", "UPDATE", "LOCATION", String.valueOf(entity.getId()),
                 entity.getLocationCode(), before, after);
@@ -99,5 +108,13 @@ public class LocationsService {
             return;
         }
         throw new BizException(ErrorCode.BIZ_ERROR.code(), "locationCode already exists in warehouse");
+    }
+
+    private String cachePrefix() {
+        return "novadepot:ref:tenant:" + RequestContext.tenantId() + ":locations:";
+    }
+
+    private void evictCache() {
+        cacheService.evictPrefix(cachePrefix());
     }
 }

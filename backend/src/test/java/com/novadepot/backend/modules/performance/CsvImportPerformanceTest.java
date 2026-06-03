@@ -1,6 +1,7 @@
 package com.novadepot.backend.modules.performance;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.novadepot.backend.common.cache.ReferenceDataCacheService;
 import com.novadepot.backend.common.context.RequestContext;
 import com.novadepot.backend.model.entity.InventoryEntity;
 import com.novadepot.backend.model.entity.InventoryTransactionEntity;
@@ -42,6 +43,7 @@ class CsvImportPerformanceTest {
     private final ImportErrorReportMapper importErrorReportMapper = mock(ImportErrorReportMapper.class);
     private final AuditLogMapper auditLogMapper = mock(AuditLogMapper.class);
     private final AuditLogRecordService auditLogRecordService = new AuditLogRecordService(auditLogMapper);
+    private final ReferenceDataCacheService cacheService = mock(ReferenceDataCacheService.class);
 
     @BeforeEach
     void setUp() {
@@ -57,7 +59,7 @@ class CsvImportPerformanceTest {
     @Test
     void productImport_preloadsExistingCodesOnceAndPreservesDuplicateSummary() {
         ProductMapper productMapper = mock(ProductMapper.class);
-        ProductsService service = new ProductsService(productMapper, importErrorReportMapper, auditLogRecordService);
+        ProductsService service = new ProductsService(productMapper, importErrorReportMapper, auditLogRecordService, cacheService);
         ProductEntity existed = product(1L, "SKU-DEMO-001");
         when(productMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(List.of(existed));
 
@@ -75,7 +77,7 @@ class CsvImportPerformanceTest {
     @Test
     void partnerImport_preloadsExistingCodesOnceAndPreservesSkippedRows() {
         PartnerMapper partnerMapper = mock(PartnerMapper.class);
-        PartnersService service = new PartnersService(partnerMapper, auditLogRecordService, importErrorReportMapper);
+        PartnersService service = new PartnersService(partnerMapper, auditLogRecordService, importErrorReportMapper, cacheService);
         var existed = new com.novadepot.backend.model.entity.PartnerEntity();
         existed.setId(1L);
         existed.setPartnerCode("P-DEMO-001");

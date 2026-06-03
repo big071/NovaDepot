@@ -48,6 +48,7 @@ const roleMenuMap: Record<string, Array<{ label: string; path: string; permissio
     { label: "AI 用量日志", path: "/ai/usage-logs", permission: "AI_USAGE_LOG_VIEW" },
     { label: "Agent 中心", path: "/agent/center", permission: "AGENT_TASK_READ" },
     { label: "知识维护", path: "/cs/knowledge", permission: "KNOWLEDGE_READ" },
+    { label: "角色管理", path: "/system/roles", permission: "ROLE_READ" },
     { label: "用户管理", path: "/system/users", permission: "USER_READ" },
     { label: "数据备份", path: "/system/backups", permission: "BACKUP_READ" },
     { label: "审计中心", path: "/system/audit-center", permission: "AUDIT_READ" }

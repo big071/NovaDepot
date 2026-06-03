@@ -87,6 +87,7 @@
       </div>
       <div class="flex items-center gap-2">
         <n-button class="nd-soft-focus" @click="resetFilters">清空</n-button>
+        <n-button class="nd-soft-focus" :loading="exporting" @click="exportCsv">CSV导出</n-button>
         <n-button class="nd-soft-focus" type="primary" :loading="loading" @click="onSearch">查询</n-button>
       </div>
     </section>
@@ -173,6 +174,7 @@ import { systemApi, type AuditLogDetail, type AuditLogDiffItem, type AuditLogIte
 const message = useMessage();
 const route = useRoute();
 const loading = ref(false);
+const exporting = ref(false);
 const errorText = ref("");
 const rows = ref<AuditLogItem[]>([]);
 const total = ref(0);
@@ -311,6 +313,20 @@ async function loadList() {
     message.error(errorText.value);
   } finally {
     loading.value = false;
+  }
+}
+
+async function exportCsv() {
+  exporting.value = true;
+  errorText.value = "";
+  try {
+    await systemApi.exportAuditLogs(queryPayload.value);
+    message.success("审计日志 CSV 已触发下载");
+  } catch (error) {
+    errorText.value = error instanceof Error ? error.message : "审计日志导出失败";
+    message.error(errorText.value);
+  } finally {
+    exporting.value = false;
   }
 }
 

@@ -10,6 +10,10 @@ import com.novadepot.backend.model.entity.AuditLogEntity;
 import com.novadepot.backend.repository.AuditLogMapper;
 import org.springframework.stereotype.Service;
 
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -86,6 +90,41 @@ public class AuditLogsService {
             throw new BizException(ErrorCode.BIZ_ERROR.code(), "Audit log not found");
         }
         return toMap(row, true);
+    }
+
+    public void writeExportCsv(OutputStream outputStream,
+                               String module,
+                               String action,
+                               String resourceType,
+                               String resourceId,
+                               String bizNo,
+                               Long operatorId,
+                               String operatorKeyword,
+                               Boolean onlyFailed,
+                               String dateFrom,
+                               String dateTo) throws java.io.IOException {
+        List<AuditLogEntity> rows = auditLogMapper.selectAuditExport(
+                RequestContext.tenantId(),
+                clean(module),
+                clean(action),
+                clean(resourceType),
+                clean(resourceId),
+                clean(bizNo),
+                operatorId,
+                clean(operatorKeyword),
+                Boolean.TRUE.equals(onlyFailed),
+                parseDateTime(dateFrom, false),
+                parseDateTime(dateTo, true)
+        );
+        try (Writer writer = new OutputStreamWriter(outputStream, StandardCharsets.UTF_8)) {
+            writer.write("id,module,action,resourceType,resourceId,bizNo,operatorId,operatorName,occurredAt\n");
+            for (AuditLogEntity row : rows) {
+                writer.write(value(row.getId()) + "," + escape(row.getModule()) + "," + escape(row.getAction()) + ","
+                        + escape(row.getResourceType()) + "," + escape(row.getResourceId()) + "," + escape(row.getBizNo()) + ","
+                        + value(row.getOperatorId()) + "," + escape(row.getOperatorName()) + "," + escape(String.valueOf(row.getOccurredAt())) + "\n");
+            }
+            writer.flush();
+        }
     }
 
     private Optional<AuditLogEntity> findNearestAuditLogById(Long id) {
@@ -175,6 +214,18 @@ public class AuditLogsService {
 
     private String clean(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private String value(Object value) {
+        return value == null ? "" : String.valueOf(value);
+    }
+
+    private String escape(String value) {
+        if (value == null) {
+            return "";
+        }
+        String escaped = value.replace("\"", "\"\"");
+        return escaped.contains(",") || escaped.contains("\"") || escaped.contains("\n") ? "\"" + escaped + "\"" : escaped;
     }
 
     private Map<String, Object> toMap(AuditLogEntity row, boolean includeDetail) {

@@ -124,7 +124,8 @@ INSERT INTO permissions (id, perm_code, perm_name, resource, action, status, cre
 (3092,'OUTBOUND_PRINT','出库单打印','/api/v1/outbound-orders/{id}/detail','PRINT','ACTIVE',NOW(3),NOW(3),0),
 (3093,'PICKING_PRINT','拣货单打印','/api/v1/outbound-orders/{id}/detail','PRINT','ACTIVE',NOW(3),NOW(3),0),
 (3094,'BACKUP_READ','备份记录查看','/api/v1/backups','GET','ACTIVE',NOW(3),NOW(3),0),
-(3095,'BACKUP_RUN','手动备份','/api/v1/backups/actions/run','POST','ACTIVE',NOW(3),NOW(3),0)
+(3095,'BACKUP_RUN','手动备份','/api/v1/backups/actions/run','POST','ACTIVE',NOW(3),NOW(3),0),
+(3130,'ROLE_MANAGE','角色权限管理','/api/v1/roles','POST/PUT','ACTIVE',NOW(3),NOW(3),0)
 ON DUPLICATE KEY UPDATE perm_name=VALUES(perm_name), resource=VALUES(resource), action=VALUES(action), status=VALUES(status), deleted=0, updated_at=NOW(3);
 INSERT INTO role_permissions (id, tenant_id, role_id, permission_id, created_at, updated_at, deleted)
 SELECT 400000 + p.id, 1, 1001, p.id, NOW(3), NOW(3), 0 FROM permissions p WHERE p.deleted=0

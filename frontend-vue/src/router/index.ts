@@ -37,6 +37,7 @@ const router = createRouter({
         { path: "agent/center", component: () => import("@/pages/agent/AgentCenterPage.vue"), meta: { requiredPermission: "AGENT_TASK_READ" } },
         { path: "cs/workspace", component: () => import("@/pages/cs/CustomerServicePage.vue"), meta: { requiredPermission: "CS_SESSION_READ" } },
         { path: "cs/knowledge", component: () => import("@/pages/cs/KnowledgePage.vue"), meta: { requiredPermission: "KNOWLEDGE_READ" } },
+        { path: "system/roles", component: () => import("@/pages/system/RolesPage.vue"), meta: { requiredPermission: "ROLE_READ", requiredRoles: ["admin"] } },
         { path: "system/users", component: () => import("@/pages/system/UsersPage.vue"), meta: { requiredPermission: "USER_READ", requiredRoles: ["admin"] } },
         { path: "system/backups", component: () => import("@/pages/system/BackupsPage.vue"), meta: { requiredPermission: "BACKUP_READ", requiredRoles: ["admin"] } },
         { path: "system/audit-center", component: () => import("@/pages/system/AuditCenterPage.vue"), meta: { requiredPermission: "AUDIT_READ", requiredRoles: ["admin"] } }

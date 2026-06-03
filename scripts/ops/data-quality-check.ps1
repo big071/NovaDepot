@@ -493,6 +493,36 @@ select
   Assert-SuccessCode $reportTicket "ticket-efficiency"
   Write-Host "v1.2 sprint4 notification/report/audit consistency passed"
 
+  Write-Host "[data-quality] v1.4 RBAC management readiness"
+  $v14RbacInconsistent = [int](Query-Scalar @"
+select
+  (select count(*) from roles where tenant_id = 1 and role_code in ('TENANT_ADMIN','WAREHOUSE_MANAGER','WAREHOUSE_OPERATOR','CS_AGENT','DATA_VIEWER') and deleted = 0 and status = 'ACTIVE') <> 5
+  or (select count(*) from users where tenant_id = 1 and username in ('admin','warehouse01','cs01','observer01') and deleted = 0 and status = 'ACTIVE') <> 4
+  or not exists (select 1 from permissions where perm_code = 'ROLE_MANAGE' and deleted = 0 and status = 'ACTIVE')
+  or not exists (
+    select 1
+      from role_permissions rp
+      join roles r on r.id = rp.role_id and r.deleted = 0
+      join permissions p on p.id = rp.permission_id and p.deleted = 0
+     where r.tenant_id = 1
+       and r.role_code = 'TENANT_ADMIN'
+       and p.perm_code = 'ROLE_MANAGE'
+       and rp.deleted = 0
+  )
+  or exists (
+    select 1
+      from role_permissions rp
+      join roles r on r.id = rp.role_id and r.deleted = 0
+      join permissions p on p.id = rp.permission_id and p.deleted = 0
+     where r.tenant_id = 1
+       and r.role_code in ('WAREHOUSE_MANAGER','WAREHOUSE_OPERATOR','CS_AGENT','DATA_VIEWER')
+       and p.perm_code = 'ROLE_MANAGE'
+       and rp.deleted = 0
+  );
+"@)
+  if ($v14RbacInconsistent -gt 0) { throw "v1.4 RBAC management readiness failed" }
+  Write-Host "v1.4 RBAC management readiness passed"
+
   Write-Host "[data-quality] passed"
 } catch {
   Write-Error "[data-quality] failed: $($_.Exception.Message)"
